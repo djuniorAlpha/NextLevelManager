@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum MachineType {
+  pc
+  console_tv
+}
+
+enum MachineStatus {
+  locked
+  time_selection
+  waiting_pix
+  active
+  offline
+}
+
+enum PaymentPurpose {
+  package_purchase
+  hourly_purchase
+  wallet_topup
+  subscription
+  console_session
+  product_sale
+}
+
+enum PaymentMethod {
+  pix
+  credit_card
+  debit_card
+  cash
+}
+
+enum PaymentProvider {
+  mercado_pago
+  manual
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  expired
+  rejected
+}
+
+enum SessionSource {
+  pix_guest
+  customer_balance
+  subscription
+  counter_sale
+  manual_free
+}
+
+enum LoyaltyTier {
+  bronze
+  prata
+  ouro
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+}
+
+enum AdminRole {
+  owner
+  attendant
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model Machine {
+  id             String        @id @default(uuid())
+  machineNumber  Int           @unique
+  type           MachineType   @default(pc)
+  consoleModelId String?
+  consoleModel   ConsoleModel? @relation(fields: [consoleModelId], references: [id])
+  macAddress     String        @unique
+  hostname       String
+  ipAddress      String
+  apiKey         String        @unique
+  status         MachineStatus @default(locked)
+  lastHeartbeatAt DateTime?
+  createdAt      DateTime      @default(now())
+
+  payments Payment[]
+  sessions Session[]
+}
+
+model ConsoleModel {
+  id              String  @id @default(uuid())
+  name            String
+  hourlyRateCents Int
+  active          Boolean @default(true)
+
+  machines Machine[]
+}
+
+model TimePackage {
+  id        String  @id @default(uuid())
+  label     String
+  minutes   Int
+  priceCents Int
+  active    Boolean @default(true)
+
+  payments         Payment[]
+  includedProducts TimePackageProduct[]
+}
+
+model HourlyRate {
+  id               String  @id @default(uuid())
+  label            String
+  ratePerHourCents Int
+  active           Boolean @default(true)
+
+  payments Payment[]
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  priceCents Int
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  saleItems             ProductSaleItem[]
+  subscriptionDiscounts SubscriptionPlanProductDiscount[]
+  timePackageIncludes   TimePackageProduct[]
+}
+
+model ProductSale {
+  id                   String    @id @default(uuid())
+  customerId           String?
+  customer             Customer? @relation(fields: [customerId], references: [id])
+  paymentId            String
+  payment              Payment   @relation(fields: [paymentId], references: [id])
+  registeredByAdminId  String?
+  registeredByAdmin    AdminUser? @relation("ProductSaleRegisteredBy", fields: [registeredByAdminId], references: [id])
+  totalCents           Int
+  createdAt            DateTime  @default(now())
+
+  items ProductSaleItem[]
+}
+
+model ProductSaleItem {
+  id                     String      @id @default(uuid())
+  productSaleId          String
+  productSale            ProductSale @relation(fields: [productSaleId], references: [id])
+  productId              String
+  product                Product     @relation(fields: [productId], references: [id])
+  quantity               Int
+  unitPriceCents         Int
+  discountPercentApplied Int?
+}
+
+model SubscriptionPlanProductDiscount {
+  id                 String          @id @default(uuid())
+  subscriptionPlanId String
+  subscriptionPlan   SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [id])
+  productId          String
+  product            Product          @relation(fields: [productId], references: [id])
+  discountPercent    Int
+
+  @@unique([subscriptionPlanId, productId])
+}
+
+model TimePackageProduct {
+  id            String      @id @default(uuid())
+  timePackageId String
+  timePackage   TimePackage @relation(fields: [timePackageId], references: [id])
+  productId     String
+  product       Product     @relation(fields: [productId], references: [id])
+  quantity      Int
+
+  @@unique([timePackageId, productId])
+}
+
+model Payment {
+  id                String          @id @default(uuid())
+  machineId         String?
+  machine           Machine?        @relation(fields: [machineId], references: [id])
+  customerId        String?
+  customer          Customer?       @relation(fields: [customerId], references: [id])
+  purpose           PaymentPurpose
+  method            PaymentMethod
+  timePackageId     String?
+  timePackage       TimePackage?    @relation(fields: [timePackageId], references: [id])
+  hourlyRateId      String?
+  hourlyRate        HourlyRate?     @relation(fields: [hourlyRateId], references: [id])
+  provider          PaymentProvider
+  externalPaymentId String?
+  qrCodeBase64      String?         @db.Text
+  qrCodeText        String?         @db.Text
+  status            PaymentStatus   @default(pending)
+  amountCents       Int
+  registeredByAdminId String?
+  registeredByAdmin AdminUser?      @relation("PaymentRegisteredBy", fields: [registeredByAdminId], references: [id])
+  payerTaxDocument  String?
+  createdAt         DateTime        @default(now())
+  paidAt            DateTime?
+
+  session      Session?
+  productSales ProductSale[]
+}
+
+model Session {
+  id               String        @id @default(uuid())
+  machineId        String
+  machine          Machine       @relation(fields: [machineId], references: [id])
+  customerId       String?
+  customer         Customer?     @relation(fields: [customerId], references: [id])
+  paymentId        String?       @unique
+  payment          Payment?      @relation(fields: [paymentId], references: [id])
+  source           SessionSource
+  allocatedSeconds Int
+  consumedSeconds  Int           @default(0)
+  startedAt        DateTime      @default(now())
+  endedAt          DateTime?
+}
+
+model Customer {
+  id           String       @id @default(uuid())
+  name         String
+  username     String       @unique
+  passwordHash String
+  taxDocument  String?
+  balanceMinutes Int        @default(0)
+  loyaltyTier  LoyaltyTier?
+  createdAt    DateTime     @default(now())
+
+  sessions      Session[]
+  payments      Payment[]
+  subscriptions CustomerSubscription[]
+  productSales  ProductSale[]
+}
+
+model SubscriptionPlan {
+  id              String  @id @default(uuid())
+  name            String
+  priceCents      Int
+  billingInterval String  @default("monthly")
+  includedMinutes Int?
+  discountPercent Int?
+  active          Boolean @default(true)
+
+  subscriptions     CustomerSubscription[]
+  productDiscounts  SubscriptionPlanProductDiscount[]
+}
+
+model CustomerSubscription {
+  id                        String             @id @default(uuid())
+  customerId                String
+  customer                  Customer           @relation(fields: [customerId], references: [id])
+  planId                    String
+  plan                      SubscriptionPlan   @relation(fields: [planId], references: [id])
+  status                    SubscriptionStatus
+  mercadoPagoPreapprovalId  String
+  includedMinutesRemaining  Int?
+  currentPeriodStart        DateTime
+  currentPeriodEnd          DateTime
+}
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  name         String
+  username     String    @unique
+  passwordHash String
+  role         AdminRole
+  createdAt    DateTime  @default(now())
+
+  registeredPayments     Payment[]     @relation("PaymentRegisteredBy")
+  registeredProductSales ProductSale[] @relation("ProductSaleRegisteredBy")
+}
