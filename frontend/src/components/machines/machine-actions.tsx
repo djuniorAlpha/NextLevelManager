@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Lock, Power, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -38,6 +39,7 @@ export function MachineActions({
         disabled={lock.isPending}
         onClick={() => lock.mutate(machineId)}
       >
+        <Lock data-icon="inline-start" />
         {lock.isPending ? "Bloqueando..." : "Bloquear"}
       </Button>
 
@@ -47,6 +49,7 @@ export function MachineActions({
         disabled={unlock.isPending}
         onClick={() => unlock.mutate(machineId)}
       >
+        <Unlock data-icon="inline-start" />
         {unlock.isPending ? "Liberando..." : "Liberar"}
       </Button>
 
@@ -56,6 +59,7 @@ export function MachineActions({
         disabled={shutdown.isPending}
         onClick={() => setShutdownDialogOpen(true)}
       >
+        <Power data-icon="inline-start" />
         {shutdown.isPending ? "Desligando..." : "Desligar"}
       </Button>
 
@@ -76,6 +80,7 @@ export function MachineActions({
               Cancelar
             </Button>
             <Button variant="destructive" onClick={confirmShutdown}>
+              <Power data-icon="inline-start" />
               Desligar
             </Button>
           </DialogFooter>

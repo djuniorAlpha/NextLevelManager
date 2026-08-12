@@ -9,19 +9,26 @@ export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
 };
 
 export const MACHINE_STATUS_BADGE_CLASS: Record<MachineStatus, string> = {
-  locked: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-  time_selection:
-    "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
-  waiting_pix:
-    "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",
-  active: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  offline: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+  locked: "bg-destructive/10 text-destructive",
+  time_selection: "bg-accent-4/10 text-accent-4",
+  waiting_pix: "bg-warning/10 text-warning",
+  active: "bg-success/10 text-success",
+  offline: "bg-muted text-muted-foreground",
 };
 
 export const MACHINE_TYPE_LABEL: Record<MachineType, string> = {
   pc: "PC",
   console_tv: "Console / TV",
 };
+
+const currencyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+export function formatCentsToBRL(cents: number): string {
+  return currencyFormatter.format(cents / 100);
+}
 
 export function formatRelativeTime(iso: string | null): string {
   if (!iso) return "nunca";

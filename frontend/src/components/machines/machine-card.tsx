@@ -16,7 +16,7 @@ export function MachineCard({ machine }: { machine: Machine }) {
           <span
             title={machine.online ? "Online" : "Offline"}
             className={`size-2.5 rounded-full ${
-              machine.online ? "animate-pulse bg-green-500" : "bg-gray-400"
+              machine.online ? "animate-pulse bg-success" : "bg-muted-foreground/40"
             }`}
           />
         </div>
