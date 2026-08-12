@@ -1,4 +1,5 @@
 import type { MachineStatus, MachineType } from "@/types/machine";
+import type { LoyaltyTier } from "@/types/customer";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -28,6 +29,23 @@ const currencyFormatter = new Intl.NumberFormat("pt-BR", {
 
 export function formatCentsToBRL(cents: number): string {
   return currencyFormatter.format(cents / 100);
+}
+
+export const LOYALTY_TIER_LABEL: Record<LoyaltyTier, string> = {
+  bronze: "Bronze",
+  prata: "Prata",
+  ouro: "Ouro",
+};
+
+export function formatMinutes(totalMinutes: number): string {
+  if (totalMinutes <= 0) return "0 min";
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours === 0) return `${minutes} min`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}min`;
 }
 
 export function formatRelativeTime(iso: string | null): string {

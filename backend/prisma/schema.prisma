@@ -231,14 +231,15 @@ model Session {
 }
 
 model Customer {
-  id           String       @id @default(uuid())
-  name         String
-  username     String       @unique
-  passwordHash String
-  taxDocument  String?
-  balanceMinutes Int        @default(0)
-  loyaltyTier  LoyaltyTier?
-  createdAt    DateTime     @default(now())
+  id                 String       @id @default(uuid())
+  name               String
+  username           String       @unique
+  passwordHash       String
+  mustChangePassword Boolean      @default(true)
+  taxDocument        String?
+  balanceMinutes     Int          @default(0)
+  loyaltyTier        LoyaltyTier?
+  createdAt          DateTime     @default(now())
 
   sessions      Session[]
   payments      Payment[]
