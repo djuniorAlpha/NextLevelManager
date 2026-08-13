@@ -67,6 +67,7 @@ enum LoyaltyTier {
 }
 
 enum SubscriptionStatus {
+  pending
   active
   canceled
   past_due
@@ -237,6 +238,7 @@ model Customer {
   passwordHash       String
   mustChangePassword Boolean      @default(true)
   taxDocument        String?
+  email              String?
   balanceMinutes     Int          @default(0)
   loyaltyTier        LoyaltyTier?
   createdAt          DateTime     @default(now())
@@ -248,13 +250,17 @@ model Customer {
 }
 
 model SubscriptionPlan {
-  id              String  @id @default(uuid())
-  name            String
-  priceCents      Int
-  billingInterval String  @default("monthly")
-  includedMinutes Int?
-  discountPercent Int?
-  active          Boolean @default(true)
+  id                           String  @id @default(uuid())
+  name                         String
+  priceCents                   Int
+  billingInterval              String  @default("monthly")
+  includedMinutes              Int?
+  discountPercent              Int?
+  pdvDiscountPercent           Int?
+  maxActiveSubscribers         Int?
+  perks                        String[]
+  mercadoPagoPreapprovalPlanId String?
+  active                       Boolean @default(true)
 
   subscriptions     CustomerSubscription[]
   productDiscounts  SubscriptionPlanProductDiscount[]
@@ -267,10 +273,11 @@ model CustomerSubscription {
   planId                    String
   plan                      SubscriptionPlan   @relation(fields: [planId], references: [id])
   status                    SubscriptionStatus
-  mercadoPagoPreapprovalId  String
+  mercadoPagoPreapprovalId  String?
   includedMinutesRemaining  Int?
-  currentPeriodStart        DateTime
-  currentPeriodEnd          DateTime
+  currentPeriodStart        DateTime?
+  currentPeriodEnd          DateTime?
+  createdAt                 DateTime           @default(now())
 }
 
 model AdminUser {

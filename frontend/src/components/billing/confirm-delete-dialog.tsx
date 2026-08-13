@@ -18,6 +18,8 @@ export function ConfirmDeleteDialog({
   description,
   onConfirm,
   isPending,
+  confirmLabel = "Excluir",
+  pendingLabel = "Excluindo...",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,6 +27,8 @@ export function ConfirmDeleteDialog({
   description: string;
   onConfirm: () => void;
   isPending: boolean;
+  confirmLabel?: string;
+  pendingLabel?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -43,7 +47,7 @@ export function ConfirmDeleteDialog({
             onClick={onConfirm}
           >
             <Trash2 data-icon="inline-start" />
-            {isPending ? "Excluindo..." : "Excluir"}
+            {isPending ? pendingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

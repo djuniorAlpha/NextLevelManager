@@ -14,9 +14,11 @@ describe('SessionsService', () => {
     tx = {
       session: { update: jest.fn() },
       customer: { update: jest.fn() },
+      customerSubscription: { findFirst: jest.fn(), update: jest.fn() },
     };
     prisma = {
       customer: { findUnique: jest.fn() },
+      customerSubscription: { findFirst: jest.fn().mockResolvedValue(null) },
       session: { create: jest.fn(), findUnique: jest.fn() },
       $transaction: jest.fn((callback) => callback(tx)),
     };
@@ -32,7 +34,7 @@ describe('SessionsService', () => {
     expect(prisma.session.create).not.toHaveBeenCalled();
   });
 
-  it('lança BadRequestException quando o saldo é insuficiente', async () => {
+  it('lança BadRequestException quando não há assinatura ativa com minutos e o saldo é insuficiente', async () => {
     prisma.customer.findUnique.mockResolvedValue({
       id: 'cust-1',
       balanceMinutes: 0,
@@ -42,6 +44,58 @@ describe('SessionsService', () => {
       service.startForCustomer(MACHINE, 'cust-1'),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  it('prioriza a assinatura ativa com minutos inclusos sobre o saldo', async () => {
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      balanceMinutes: 90,
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      includedMinutesRemaining: 40,
+    });
+    prisma.session.create.mockResolvedValue({
+      id: 'session-1',
+      allocatedSeconds: 2400,
+      source: 'subscription',
+    });
+
+    const result = await service.startForCustomer(MACHINE, 'cust-1');
+
+    expect(prisma.session.create).toHaveBeenCalledWith({
+      data: {
+        machineId: 'machine-1',
+        customerId: 'cust-1',
+        source: 'subscription',
+        allocatedSeconds: 2400,
+      },
+    });
+    expect(result).toEqual({
+      sessionId: 'session-1',
+      allocatedSeconds: 2400,
+      source: 'subscription',
+    });
+  });
+
+  it('cai pro saldo quando a assinatura ativa não tem minutos inclusos restantes', async () => {
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      balanceMinutes: 90,
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      includedMinutesRemaining: 0,
+    });
+    prisma.session.create.mockResolvedValue({
+      id: 'session-1',
+      allocatedSeconds: 5400,
+      source: 'customer_balance',
+    });
+
+    const result = await service.startForCustomer(MACHINE, 'cust-1');
+
+    expect(result.source).toBe('customer_balance');
   });
 
   it('cria a sessão alocando o saldo inteiro em segundos, sem descontar o saldo', async () => {
@@ -139,6 +193,26 @@ describe('SessionsService', () => {
     expect(tx.session.update).toHaveBeenCalledWith({
       where: { id: 'session-1' },
       data: { consumedSeconds: 300, endedAt: expect.any(Date) },
+    });
+    expect(tx.customer.update).not.toHaveBeenCalled();
+  });
+
+  it('endSession decrementa includedMinutesRemaining quando a sessão veio de assinatura', async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'machine-1',
+      customerId: 'cust-1',
+      source: 'subscription',
+      allocatedSeconds: 2400,
+      endedAt: null,
+    });
+    tx.customerSubscription.findFirst.mockResolvedValue({ id: 'sub-1' });
+
+    await service.endSession(MACHINE, 'session-1', 125);
+
+    expect(tx.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { includedMinutesRemaining: { decrement: 3 } },
     });
     expect(tx.customer.update).not.toHaveBeenCalled();
   });

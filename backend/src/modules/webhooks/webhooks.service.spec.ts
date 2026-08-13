@@ -20,7 +20,7 @@ describe('WebhooksService', () => {
   let service: WebhooksService;
   let prisma: any;
   let config: { get: jest.Mock };
-  let mercadoPago: { getPaymentStatus: jest.Mock };
+  let mercadoPago: { getPaymentStatus: jest.Mock; getPreapproval: jest.Mock };
   let realtime: { emitPaymentConfirmed: jest.Mock };
 
   const secret = 'whsec-test';
@@ -31,9 +31,11 @@ describe('WebhooksService', () => {
       timePackage: { findUnique: jest.fn() },
       hourlyRate: { findUnique: jest.fn() },
       session: { create: jest.fn() },
+      customerSubscription: { findFirst: jest.fn(), update: jest.fn() },
+      subscriptionPlan: { findUnique: jest.fn() },
     };
     config = { get: jest.fn().mockReturnValue(secret) };
-    mercadoPago = { getPaymentStatus: jest.fn() };
+    mercadoPago = { getPaymentStatus: jest.fn(), getPreapproval: jest.fn() };
     realtime = { emitPaymentConfirmed: jest.fn() };
 
     service = new WebhooksService(
@@ -189,5 +191,87 @@ describe('WebhooksService', () => {
     await expect(
       service.handleMercadoPago({}, { data: { id: '999' } }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it('ignora notificação de assinatura quando não há CustomerSubscription correspondente', async () => {
+    prisma.customerSubscription.findFirst.mockResolvedValue(null);
+    const headers = signedHeaders(secret, 'mp-preapproval-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_preapproval',
+      data: { id: 'mp-preapproval-1' },
+    });
+
+    expect(mercadoPago.getPreapproval).not.toHaveBeenCalled();
+  });
+
+  it('ativa a assinatura, preenche minutos inclusos e período ao autorizar pela primeira vez', async () => {
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'pending',
+    });
+    mercadoPago.getPreapproval.mockResolvedValue({ status: 'authorized' });
+    prisma.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-1',
+      includedMinutes: 600,
+    });
+
+    const headers = signedHeaders(secret, 'mp-preapproval-1');
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_preapproval',
+      data: { id: 'mp-preapproval-1' },
+    });
+
+    expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: {
+        status: 'active',
+        includedMinutesRemaining: 600,
+        currentPeriodStart: expect.any(Date),
+        currentPeriodEnd: expect.any(Date),
+      },
+    });
+  });
+
+  it('marca a assinatura como canceled quando cancelada/pausada no Mercado Pago', async () => {
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'active',
+    });
+    mercadoPago.getPreapproval.mockResolvedValue({ status: 'cancelled' });
+
+    const headers = signedHeaders(secret, 'mp-preapproval-1');
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_preapproval',
+      data: { id: 'mp-preapproval-1' },
+    });
+
+    expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { status: 'canceled' },
+    });
+    expect(prisma.subscriptionPlan.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('não repreenche minutos/período quando a assinatura já estava ativa', async () => {
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'active',
+    });
+    mercadoPago.getPreapproval.mockResolvedValue({ status: 'authorized' });
+
+    const headers = signedHeaders(secret, 'mp-preapproval-1');
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_preapproval',
+      data: { id: 'mp-preapproval-1' },
+    });
+
+    expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { status: 'active' },
+    });
   });
 });

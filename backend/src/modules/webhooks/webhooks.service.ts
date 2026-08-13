@@ -1,12 +1,13 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
-import type { Payment, PaymentStatus } from '@prisma/client';
+import type { Payment, PaymentStatus, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../payments/mercado-pago.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export interface MercadoPagoWebhookBody {
+  type?: string;
   data?: { id?: string | number };
 }
 
@@ -26,6 +27,10 @@ export class WebhooksService {
     body: MercadoPagoWebhookBody,
   ) {
     this.verifySignature(headers, body);
+
+    if (body.type === 'subscription_preapproval') {
+      return this.handleSubscriptionPreapproval(body);
+    }
 
     const externalPaymentId = body.data?.id;
     if (!externalPaymentId) {
@@ -100,6 +105,65 @@ export class WebhooksService {
 
     if (expected !== parts.v1) {
       throw new UnauthorizedException('Assinatura do webhook inválida');
+    }
+  }
+
+  private async handleSubscriptionPreapproval(body: MercadoPagoWebhookBody) {
+    const preapprovalId = body.data?.id;
+    if (!preapprovalId) {
+      return { ok: true };
+    }
+
+    const subscription = await this.prisma.customerSubscription.findFirst({
+      where: { mercadoPagoPreapprovalId: String(preapprovalId) },
+    });
+    if (!subscription) {
+      return { ok: true };
+    }
+
+    const { status: mpStatus } = await this.mercadoPago.getPreapproval(
+      String(preapprovalId),
+    );
+    const mappedStatus = this.mapSubscriptionStatus(mpStatus);
+    const becomingActive =
+      mappedStatus === 'active' && subscription.status !== 'active';
+
+    if (becomingActive) {
+      const plan = await this.prisma.subscriptionPlan.findUnique({
+        where: { id: subscription.planId },
+      });
+      const currentPeriodStart = new Date();
+      const currentPeriodEnd = new Date(currentPeriodStart);
+      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+
+      await this.prisma.customerSubscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: mappedStatus,
+          includedMinutesRemaining: plan?.includedMinutes ?? null,
+          currentPeriodStart,
+          currentPeriodEnd,
+        },
+      });
+    } else {
+      await this.prisma.customerSubscription.update({
+        where: { id: subscription.id },
+        data: { status: mappedStatus },
+      });
+    }
+
+    return { ok: true };
+  }
+
+  private mapSubscriptionStatus(mpStatus?: string): SubscriptionStatus {
+    switch (mpStatus) {
+      case 'authorized':
+        return 'active';
+      case 'cancelled':
+      case 'paused':
+        return 'canceled';
+      default:
+        return 'pending';
     }
   }
 

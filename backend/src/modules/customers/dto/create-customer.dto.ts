@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateCustomerDto {
   @IsString()
@@ -16,4 +16,8 @@ export class CreateCustomerDto {
   @IsOptional()
   @IsString()
   taxDocument?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 }

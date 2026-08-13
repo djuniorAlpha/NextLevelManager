@@ -8,6 +8,7 @@ export interface Customer {
   username: string;
   mustChangePassword: boolean;
   taxDocument: string | null;
+  email: string | null;
   balanceMinutes: number;
   loyaltyTier: LoyaltyTier | null;
   createdAt: string;
@@ -18,6 +19,7 @@ export interface CreateCustomerDto {
   username: string;
   password: string;
   taxDocument?: string;
+  email?: string;
 }
 
 export type UpdateCustomerDto = Partial<CreateCustomerDto>;

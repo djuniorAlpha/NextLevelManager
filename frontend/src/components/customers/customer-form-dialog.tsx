@@ -31,6 +31,7 @@ export function CustomerFormDialog({
   const [username, setUsername] = useState(customer?.username ?? "");
   const [password, setPassword] = useState("");
   const [taxDocument, setTaxDocument] = useState(customer?.taxDocument ?? "");
+  const [email, setEmail] = useState(customer?.email ?? "");
 
   const create = useCreateCustomer();
   const update = useUpdateCustomer();
@@ -41,6 +42,7 @@ export function CustomerFormDialog({
     setUsername("");
     setPassword("");
     setTaxDocument("");
+    setEmail("");
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -54,6 +56,7 @@ export function CustomerFormDialog({
             name,
             username,
             taxDocument: taxDocument || undefined,
+            email: email || undefined,
             ...(password ? { password } : {}),
           },
         },
@@ -61,7 +64,13 @@ export function CustomerFormDialog({
       );
     } else {
       create.mutate(
-        { name, username, password, taxDocument: taxDocument || undefined },
+        {
+          name,
+          username,
+          password,
+          taxDocument: taxDocument || undefined,
+          email: email || undefined,
+        },
         {
           onSuccess: () => {
             onOpenChange(false);
@@ -136,6 +145,19 @@ export function CustomerFormDialog({
               value={taxDocument}
               onChange={(event) => setTaxDocument(event.target.value)}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cust-email">E-mail (opcional)</Label>
+            <Input
+              id="cust-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Necessário pra criar uma assinatura em nome desse cliente.
+            </p>
           </div>
 
           {errorMessage && (

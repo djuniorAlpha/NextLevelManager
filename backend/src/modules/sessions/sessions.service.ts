@@ -14,6 +14,27 @@ export class SessionsService {
       throw new NotFoundException('Cliente não encontrado');
     }
 
+    const activeSubscription = await this.prisma.customerSubscription.findFirst(
+      { where: { customerId, status: 'active' } },
+    );
+
+    if ((activeSubscription?.includedMinutesRemaining ?? 0) > 0) {
+      const session = await this.prisma.session.create({
+        data: {
+          machineId: machine.id,
+          customerId: customer.id,
+          source: 'subscription',
+          allocatedSeconds: activeSubscription!.includedMinutesRemaining! * 60,
+        },
+      });
+
+      return {
+        sessionId: session.id,
+        allocatedSeconds: session.allocatedSeconds,
+        source: session.source,
+      };
+    }
+
     if (customer.balanceMinutes <= 0) {
       throw new BadRequestException('Saldo insuficiente');
     }
@@ -61,13 +82,29 @@ export class SessionsService {
         data: { consumedSeconds: clampedConsumedSeconds, endedAt: new Date() },
       });
 
-      if (session.customerId) {
-        const consumedMinutes = Math.ceil(clampedConsumedSeconds / 60);
-        await tx.customer.update({
-          where: { id: session.customerId },
-          data: { balanceMinutes: { decrement: consumedMinutes } },
-        });
+      if (!session.customerId) {
+        return;
       }
+
+      const consumedMinutes = Math.ceil(clampedConsumedSeconds / 60);
+
+      if (session.source === 'subscription') {
+        const activeSubscription = await tx.customerSubscription.findFirst({
+          where: { customerId: session.customerId, status: 'active' },
+        });
+        if (activeSubscription) {
+          await tx.customerSubscription.update({
+            where: { id: activeSubscription.id },
+            data: { includedMinutesRemaining: { decrement: consumedMinutes } },
+          });
+        }
+        return;
+      }
+
+      await tx.customer.update({
+        where: { id: session.customerId },
+        data: { balanceMinutes: { decrement: consumedMinutes } },
+      });
     });
 
     return { ok: true };

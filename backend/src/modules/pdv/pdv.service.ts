@@ -52,10 +52,34 @@ export class PdvService {
         }
       }
 
-      const totalCents = dto.items.reduce((sum, item) => {
+      let discountPercent: number | null = null;
+      if (dto.customerId) {
+        const activeSubscription = await tx.customerSubscription.findFirst({
+          where: { customerId: dto.customerId, status: 'active' },
+          include: { plan: true },
+        });
+        if (activeSubscription?.plan.pdvDiscountPercent) {
+          discountPercent = activeSubscription.plan.pdvDiscountPercent;
+        }
+      }
+
+      const lineItems = dto.items.map((item) => {
         const product = productsById.get(item.productId)!;
-        return sum + product.priceCents * item.quantity;
-      }, 0);
+        const unitPriceCents = discountPercent
+          ? Math.round(product.priceCents * (1 - discountPercent / 100))
+          : product.priceCents;
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPriceCents,
+          discountPercentApplied: discountPercent,
+        };
+      });
+
+      const totalCents = lineItems.reduce(
+        (sum, item) => sum + item.unitPriceCents * item.quantity,
+        0,
+      );
 
       const payment = await tx.payment.create({
         data: {
@@ -76,13 +100,7 @@ export class PdvService {
           customerId: dto.customerId,
           registeredByAdminId,
           totalCents,
-          items: {
-            create: dto.items.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPriceCents: productsById.get(item.productId)!.priceCents,
-            })),
-          },
+          items: { create: lineItems },
         },
         include: SALE_INCLUDE,
       });

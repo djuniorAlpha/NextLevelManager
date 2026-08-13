@@ -13,6 +13,7 @@ const CUSTOMER_SELECT = {
   username: true,
   mustChangePassword: true,
   taxDocument: true,
+  email: true,
   balanceMinutes: true,
   loyaltyTier: true,
   createdAt: true,
@@ -47,6 +48,7 @@ export class CustomersService {
         passwordHash,
         mustChangePassword: true,
         taxDocument: dto.taxDocument,
+        email: dto.email,
       },
       select: CUSTOMER_SELECT,
     });

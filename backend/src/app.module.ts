@@ -12,6 +12,7 @@ import { ProductsModule } from './modules/products/products.module';
 import { PdvModule } from './modules/pdv/pdv.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -31,6 +32,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     PdvModule,
     ReportsModule,
     SessionsModule,
+    SubscriptionsModule,
     PaymentsModule,
     WebhooksModule,
   ],

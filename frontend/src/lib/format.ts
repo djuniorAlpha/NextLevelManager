@@ -2,6 +2,7 @@ import type { MachineStatus, MachineType } from "@/types/machine";
 import type { LoyaltyTier } from "@/types/customer";
 import type { PdvSaleMethod } from "@/types/pdv";
 import type { PaymentPurpose } from "@/types/report";
+import type { SubscriptionStatus } from "@/types/subscription";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -64,6 +65,20 @@ export const PAYMENT_PURPOSE_LABEL: Record<PaymentPurpose, string> = {
   subscription: "Assinatura",
   console_session: "Sessão de console",
   product_sale: "PDV",
+};
+
+export const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionStatus, string> = {
+  pending: "Aguardando pagamento",
+  active: "Ativa",
+  canceled: "Cancelada",
+  past_due: "Pagamento atrasado",
+};
+
+export const SUBSCRIPTION_STATUS_BADGE_CLASS: Record<SubscriptionStatus, string> = {
+  pending: "bg-warning/10 text-warning",
+  active: "bg-success/10 text-success",
+  canceled: "bg-muted text-muted-foreground",
+  past_due: "bg-destructive/10 text-destructive",
 };
 
 export function toISODateString(date: Date): string {
