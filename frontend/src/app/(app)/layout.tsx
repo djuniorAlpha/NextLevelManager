@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CreditCard, LogOut, Monitor, ShoppingCart, Users } from "lucide-react";
+import {
+  CreditCard,
+  LineChart,
+  LogOut,
+  Monitor,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 import { AuthGuard } from "@/components/auth/auth-guard";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +23,7 @@ const NAV_LINKS = [
   { href: "/cobranca-pc", label: "Cobrança PC", icon: CreditCard },
   { href: "/clientes", label: "Clientes", icon: Users },
   { href: "/pdv", label: "PDV", icon: ShoppingCart },
+  { href: "/financeiro", label: "Financeiro", icon: LineChart },
 ];
 
 function AppShell({ children }: { children: React.ReactNode }) {

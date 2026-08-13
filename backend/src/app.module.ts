@@ -10,6 +10,7 @@ import { HourlyRatesModule } from './modules/hourly-rates/hourly-rates.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { ProductsModule } from './modules/products/products.module';
 import { PdvModule } from './modules/pdv/pdv.module';
+import { ReportsModule } from './modules/reports/reports.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
@@ -27,6 +28,7 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     CustomersModule,
     ProductsModule,
     PdvModule,
+    ReportsModule,
     PaymentsModule,
     WebhooksModule,
   ],

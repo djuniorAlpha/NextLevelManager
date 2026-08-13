@@ -1,6 +1,7 @@
 import type { MachineStatus, MachineType } from "@/types/machine";
 import type { LoyaltyTier } from "@/types/customer";
 import type { PdvSaleMethod } from "@/types/pdv";
+import type { PaymentPurpose } from "@/types/report";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -55,6 +56,19 @@ export const PDV_SALE_METHOD_LABEL: Record<PdvSaleMethod, string> = {
   debit_card: "Cartão de débito",
   cash: "Dinheiro",
 };
+
+export const PAYMENT_PURPOSE_LABEL: Record<PaymentPurpose, string> = {
+  package_purchase: "Pacote de tempo",
+  hourly_purchase: "Tarifa por hora",
+  wallet_topup: "Recarga de saldo",
+  subscription: "Assinatura",
+  console_session: "Sessão de console",
+  product_sale: "PDV",
+};
+
+export function toISODateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 export function formatRelativeTime(iso: string | null): string {
   if (!iso) return "nunca";
