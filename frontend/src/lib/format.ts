@@ -1,5 +1,6 @@
 import type { MachineStatus, MachineType } from "@/types/machine";
 import type { LoyaltyTier } from "@/types/customer";
+import type { PdvSaleMethod } from "@/types/pdv";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -47,6 +48,13 @@ export function formatMinutes(totalMinutes: number): string {
   if (minutes === 0) return `${hours}h`;
   return `${hours}h ${minutes}min`;
 }
+
+export const PDV_SALE_METHOD_LABEL: Record<PdvSaleMethod, string> = {
+  pix: "Pix",
+  credit_card: "Cartão de crédito",
+  debit_card: "Cartão de débito",
+  cash: "Dinheiro",
+};
 
 export function formatRelativeTime(iso: string | null): string {
   if (!iso) return "nunca";
