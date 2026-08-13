@@ -33,4 +33,43 @@ export class SessionsService {
       source: session.source,
     };
   }
+
+  async endSession(
+    machine: Machine,
+    sessionId: string,
+    consumedSeconds: number,
+  ) {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session || session.machineId !== machine.id) {
+      throw new NotFoundException('Sessão não encontrada');
+    }
+
+    if (session.endedAt) {
+      return { ok: true };
+    }
+
+    const clampedConsumedSeconds = Math.min(
+      Math.max(0, consumedSeconds),
+      session.allocatedSeconds,
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.session.update({
+        where: { id: session.id },
+        data: { consumedSeconds: clampedConsumedSeconds, endedAt: new Date() },
+      });
+
+      if (session.customerId) {
+        const consumedMinutes = Math.ceil(clampedConsumedSeconds / 60);
+        await tx.customer.update({
+          where: { id: session.customerId },
+          data: { balanceMinutes: { decrement: consumedMinutes } },
+        });
+      }
+    });
+
+    return { ok: true };
+  }
 }

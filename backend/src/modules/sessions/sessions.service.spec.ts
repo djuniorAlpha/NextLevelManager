@@ -8,10 +8,17 @@ describe('SessionsService', () => {
 
   const MACHINE = { id: 'machine-1' } as Machine;
 
+  let tx: any;
+
   beforeEach(() => {
+    tx = {
+      session: { update: jest.fn() },
+      customer: { update: jest.fn() },
+    };
     prisma = {
       customer: { findUnique: jest.fn() },
-      session: { create: jest.fn() },
+      session: { create: jest.fn(), findUnique: jest.fn() },
+      $transaction: jest.fn((callback) => callback(tx)),
     };
     service = new SessionsService(prisma);
   });
@@ -63,5 +70,76 @@ describe('SessionsService', () => {
       allocatedSeconds: 5400,
       source: 'customer_balance',
     });
+  });
+
+  it('endSession lança NotFoundException quando a sessão não existe ou é de outra máquina', async () => {
+    prisma.session.findUnique.mockResolvedValue(null);
+    await expect(
+      service.endSession(MACHINE, 'ghost', 100),
+    ).rejects.toThrow(NotFoundException);
+
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'outra-máquina',
+    });
+    await expect(
+      service.endSession(MACHINE, 'session-1', 100),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(tx.session.update).not.toHaveBeenCalled();
+  });
+
+  it('endSession é idempotente quando a sessão já foi encerrada', async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'machine-1',
+      endedAt: new Date(),
+    });
+
+    const result = await service.endSession(MACHINE, 'session-1', 100);
+
+    expect(result).toEqual({ ok: true });
+    expect(tx.session.update).not.toHaveBeenCalled();
+    expect(tx.customer.update).not.toHaveBeenCalled();
+  });
+
+  it('endSession desconta o saldo arredondando pra cima ao minuto, limitado ao alocado', async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'machine-1',
+      customerId: 'cust-1',
+      allocatedSeconds: 5400,
+      endedAt: null,
+    });
+
+    const result = await service.endSession(MACHINE, 'session-1', 125);
+
+    expect(tx.session.update).toHaveBeenCalledWith({
+      where: { id: 'session-1' },
+      data: { consumedSeconds: 125, endedAt: expect.any(Date) },
+    });
+    expect(tx.customer.update).toHaveBeenCalledWith({
+      where: { id: 'cust-1' },
+      data: { balanceMinutes: { decrement: 3 } },
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
+  it('endSession limita o consumo reportado ao tempo alocado e não desconta sessão sem cliente', async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'machine-1',
+      customerId: null,
+      allocatedSeconds: 300,
+      endedAt: null,
+    });
+
+    await service.endSession(MACHINE, 'session-1', 999999);
+
+    expect(tx.session.update).toHaveBeenCalledWith({
+      where: { id: 'session-1' },
+      data: { consumedSeconds: 300, endedAt: expect.any(Date) },
+    });
+    expect(tx.customer.update).not.toHaveBeenCalled();
   });
 });
