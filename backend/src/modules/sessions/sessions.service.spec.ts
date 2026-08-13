@@ -1,0 +1,67 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { Machine } from '@prisma/client';
+import { SessionsService } from './sessions.service';
+
+describe('SessionsService', () => {
+  let service: SessionsService;
+  let prisma: any;
+
+  const MACHINE = { id: 'machine-1' } as Machine;
+
+  beforeEach(() => {
+    prisma = {
+      customer: { findUnique: jest.fn() },
+      session: { create: jest.fn() },
+    };
+    service = new SessionsService(prisma);
+  });
+
+  it('lança NotFoundException quando o cliente não existe', async () => {
+    prisma.customer.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.startForCustomer(MACHINE, 'ghost'),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  it('lança BadRequestException quando o saldo é insuficiente', async () => {
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      balanceMinutes: 0,
+    });
+
+    await expect(
+      service.startForCustomer(MACHINE, 'cust-1'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.session.create).not.toHaveBeenCalled();
+  });
+
+  it('cria a sessão alocando o saldo inteiro em segundos, sem descontar o saldo', async () => {
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      balanceMinutes: 90,
+    });
+    prisma.session.create.mockResolvedValue({
+      id: 'session-1',
+      allocatedSeconds: 5400,
+      source: 'customer_balance',
+    });
+
+    const result = await service.startForCustomer(MACHINE, 'cust-1');
+
+    expect(prisma.session.create).toHaveBeenCalledWith({
+      data: {
+        machineId: 'machine-1',
+        customerId: 'cust-1',
+        source: 'customer_balance',
+        allocatedSeconds: 5400,
+      },
+    });
+    expect(result).toEqual({
+      sessionId: 'session-1',
+      allocatedSeconds: 5400,
+      source: 'customer_balance',
+    });
+  });
+});

@@ -6,11 +6,17 @@ import { AuthService } from './auth.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let prisma: { adminUser: { findUnique: jest.Mock } };
+  let prisma: {
+    adminUser: { findUnique: jest.Mock };
+    customer: { findUnique: jest.Mock; update: jest.Mock };
+  };
   let jwtService: { signAsync: jest.Mock };
 
   beforeEach(() => {
-    prisma = { adminUser: { findUnique: jest.fn() } };
+    prisma = {
+      adminUser: { findUnique: jest.fn() },
+      customer: { findUnique: jest.fn(), update: jest.fn() },
+    };
     jwtService = { signAsync: jest.fn().mockResolvedValue('signed-token') };
     service = new AuthService(
       prisma as unknown as PrismaService,
@@ -64,6 +70,75 @@ describe('AuthService', () => {
       sub: 'admin-1',
       username: 'admin',
       role: 'owner',
+    });
+  });
+
+  it('loginCustomer rejeita usuário inexistente', async () => {
+    prisma.customer.findUnique.mockResolvedValue(null);
+
+    await expect(
+      service.loginCustomer('ghost', 'whatever'),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('loginCustomer rejeita senha incorreta', async () => {
+    const passwordHash = await bcrypt.hash('correct-password', 4);
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      username: 'joao',
+      name: 'João',
+      passwordHash,
+      balanceMinutes: 60,
+      loyaltyTier: null,
+      mustChangePassword: true,
+    });
+
+    await expect(
+      service.loginCustomer('joao', 'wrong-password'),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('loginCustomer devolve accessToken e dados do cliente, incluindo mustChangePassword', async () => {
+    const passwordHash = await bcrypt.hash('correct-password', 4);
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'cust-1',
+      username: 'joao',
+      name: 'João',
+      passwordHash,
+      balanceMinutes: 60,
+      loyaltyTier: null,
+      mustChangePassword: true,
+    });
+
+    const result = await service.loginCustomer('joao', 'correct-password');
+
+    expect(result.accessToken).toBe('signed-token');
+    expect(result.customer).toEqual({
+      id: 'cust-1',
+      name: 'João',
+      username: 'joao',
+      balanceMinutes: 60,
+      loyaltyTier: null,
+      mustChangePassword: true,
+    });
+    expect(jwtService.signAsync).toHaveBeenCalledWith({
+      sub: 'cust-1',
+      username: 'joao',
+    });
+  });
+
+  it('changeCustomerPassword atualiza a senha e zera mustChangePassword', async () => {
+    prisma.customer.update.mockResolvedValue({ id: 'cust-1' });
+
+    const result = await service.changeCustomerPassword('cust-1', 'nova-senha');
+
+    expect(result).toEqual({ ok: true });
+    expect(prisma.customer.update).toHaveBeenCalledWith({
+      where: { id: 'cust-1' },
+      data: {
+        passwordHash: expect.any(String),
+        mustChangePassword: false,
+      },
     });
   });
 });
