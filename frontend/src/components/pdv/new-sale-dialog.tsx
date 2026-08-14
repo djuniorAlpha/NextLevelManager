@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCustomers } from "@/hooks/use-customers";
 import { useCreatePdvSale } from "@/hooks/use-pdv";
 import { useProducts } from "@/hooks/use-products";
@@ -19,10 +26,11 @@ import { ApiError } from "@/lib/api/client";
 import { PDV_SALE_METHOD_LABEL, formatCentsToBRL } from "@/lib/format";
 import type { PdvSaleMethod } from "@/types/pdv";
 
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-full border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm dark:bg-input/30";
-
 const METHOD_OPTIONS: PdvSaleMethod[] = ["cash", "pix", "credit_card", "debit_card"];
+
+// Radix Select não aceita value="" num Item (reservado pra "nada selecionado") —
+// usa esse sentinel pra representar "Sem cliente" e converte de volta ao enviar.
+const NO_CUSTOMER = "none";
 
 export function NewSaleDialog({
   open,
@@ -131,35 +139,43 @@ export function NewSaleDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sale-method">Forma de pagamento</Label>
-              <select
-                id="sale-method"
-                className={SELECT_CLASS}
+              <Select
                 value={method}
-                onChange={(event) => setMethod(event.target.value as PdvSaleMethod)}
+                onValueChange={(value) => setMethod(value as PdvSaleMethod)}
               >
-                {METHOD_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {PDV_SALE_METHOD_LABEL[option]}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="sale-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {METHOD_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {PDV_SALE_METHOD_LABEL[option]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sale-customer">Cliente (opcional)</Label>
-              <select
-                id="sale-customer"
-                className={SELECT_CLASS}
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
+              <Select
+                value={customerId || NO_CUSTOMER}
+                onValueChange={(value) =>
+                  setCustomerId(value === NO_CUSTOMER ? "" : value)
+                }
               >
-                <option value="">Sem cliente</option>
-                {(customers ?? []).map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="sale-customer">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CUSTOMER}>Sem cliente</SelectItem>
+                  {(customers ?? []).map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

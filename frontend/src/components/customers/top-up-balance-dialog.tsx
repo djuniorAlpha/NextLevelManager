@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTopUpCustomerBalance } from "@/hooks/use-top-up-customer-balance";
 import { formatMinutes } from "@/lib/format";
 import type { Customer, TopUpMethod } from "@/types/customer";
@@ -21,9 +28,6 @@ const METHOD_OPTIONS: { value: TopUpMethod; label: string }[] = [
   { value: "credit_card", label: "Cartão de crédito" },
   { value: "debit_card", label: "Cartão de débito" },
 ];
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-full border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm dark:bg-input/30";
 
 export function TopUpBalanceDialog({
   open,
@@ -109,20 +113,21 @@ export function TopUpBalanceDialog({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="topup-method">Forma de pagamento</Label>
-              <select
-                id="topup-method"
-                className={SELECT_CLASS}
+              <Select
                 value={method}
-                onChange={(event) =>
-                  setMethod(event.target.value as TopUpMethod)
-                }
+                onValueChange={(value) => setMethod(value as TopUpMethod)}
               >
-                {METHOD_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="topup-method">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {METHOD_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

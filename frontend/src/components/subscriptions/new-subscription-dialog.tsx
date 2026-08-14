@@ -14,14 +14,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useCustomers } from "@/hooks/use-customers";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useCreateSubscription } from "@/hooks/use-subscriptions";
 import { ApiError } from "@/lib/api/client";
 import type { CreateSubscriptionResult } from "@/types/subscription";
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-full border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm dark:bg-input/30";
 
 export function NewSubscriptionDialog({
   open,
@@ -118,42 +122,34 @@ export function NewSubscriptionDialog({
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sub-customer">Cliente</Label>
-              <select
-                id="sub-customer"
-                className={SELECT_CLASS}
-                value={customerId}
-                onChange={(event) => setCustomerId(event.target.value)}
-                required
-              >
-                <option value="" disabled>
-                  Selecione um cliente
-                </option>
-                {(customers ?? []).map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={customerId} onValueChange={setCustomerId}>
+                <SelectTrigger id="sub-customer">
+                  <SelectValue placeholder="Selecione um cliente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(customers ?? []).map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sub-plan">Plano</Label>
-              <select
-                id="sub-plan"
-                className={SELECT_CLASS}
-                value={planId}
-                onChange={(event) => setPlanId(event.target.value)}
-                required
-              >
-                <option value="" disabled>
-                  Selecione um plano
-                </option>
-                {activePlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={planId} onValueChange={setPlanId}>
+                <SelectTrigger id="sub-plan">
+                  <SelectValue placeholder="Selecione um plano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activePlans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {needsEmail && (

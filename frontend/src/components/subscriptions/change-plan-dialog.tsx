@@ -11,13 +11,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSubscriptionPlans } from "@/hooks/use-subscription-plans";
 import { useChangeSubscriptionPlan } from "@/hooks/use-subscriptions";
 import { ApiError } from "@/lib/api/client";
 import type { CustomerSubscription } from "@/types/subscription";
-
-const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-full border border-input bg-transparent px-3 py-1 text-base transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/20 md:text-sm dark:bg-input/30";
 
 export function ChangePlanDialog({
   open,
@@ -84,22 +88,18 @@ export function ChangePlanDialog({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="change-plan-select">Plano novo</Label>
-            <select
-              id="change-plan-select"
-              className={SELECT_CLASS}
-              value={planId}
-              onChange={(event) => setPlanId(event.target.value)}
-              required
-            >
-              <option value="" disabled>
-                Selecione um plano
-              </option>
-              {otherActivePlans.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {plan.name}
-                </option>
-              ))}
-            </select>
+            <Select value={planId} onValueChange={setPlanId}>
+              <SelectTrigger id="change-plan-select">
+                <SelectValue placeholder="Selecione um plano" />
+              </SelectTrigger>
+              <SelectContent>
+                {otherActivePlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {errorMessage && (

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Pencil, Plus, Trash2, Wallet } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Pencil, Plus, Search, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -29,6 +30,7 @@ export function CustomersSection() {
   const [formState, setFormState] = useState<FormState | null>(null);
   const [toppingUp, setToppingUp] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState<Customer | null>(null);
+  const [search, setSearch] = useState("");
 
   function handleConfirmDelete() {
     if (!deleting) return;
@@ -36,6 +38,16 @@ export function CustomersSection() {
       onSuccess: () => setDeleting(null),
     });
   }
+
+  const filteredData = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return data ?? [];
+    return (data ?? []).filter((item) =>
+      [item.name, item.username, item.email]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(term)),
+    );
+  }, [data, search]);
 
   return (
     <Card>
@@ -48,6 +60,21 @@ export function CustomersSection() {
       </CardHeader>
 
       <CardContent>
+        {!isLoading && !isError && data && data.length > 0 && (
+          <div className="relative mb-4">
+            <Search
+              data-icon="input-start"
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por nome, usuário ou e-mail..."
+              className="pl-9"
+            />
+          </div>
+        )}
+
         {isLoading && <Skeleton className="h-32 w-full" />}
 
         {isError && (
@@ -67,7 +94,13 @@ export function CustomersSection() {
           </p>
         )}
 
-        {!isLoading && !isError && data && data.length > 0 && (
+        {!isLoading && !isError && data && data.length > 0 && filteredData.length === 0 && (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            Nenhum cliente encontrado para &quot;{search}&quot;.
+          </p>
+        )}
+
+        {!isLoading && !isError && filteredData.length > 0 && (
           <Table>
             <TableHeader>
               <TableRow>
@@ -80,7 +113,7 @@ export function CustomersSection() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.map((item) => (
+              {filteredData.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.username}</TableCell>

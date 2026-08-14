@@ -101,6 +101,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: #05060d;
   --foreground: #f5f6fb;
   --card: rgb(15 16 30 / 85%);
