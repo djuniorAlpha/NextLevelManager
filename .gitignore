@@ -21,6 +21,9 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# dev.sh up/down state
+.dev.pids
+
 # Test / coverage
 coverage/
 
