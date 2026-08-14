@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCustomers } from "@/hooks/use-customers";
+import { useAllSubscriptions } from "@/hooks/use-subscriptions";
 import { useCreatePdvSale } from "@/hooks/use-pdv";
 import { useProducts } from "@/hooks/use-products";
 import { ApiError } from "@/lib/api/client";
@@ -28,9 +30,7 @@ import type { PdvSaleMethod } from "@/types/pdv";
 
 const METHOD_OPTIONS: PdvSaleMethod[] = ["cash", "pix", "credit_card", "debit_card"];
 
-// Radix Select não aceita value="" num Item (reservado pra "nada selecionado") —
-// usa esse sentinel pra representar "Sem cliente" e converte de volta ao enviar.
-const NO_CUSTOMER = "none";
+type CartLine = { productId: string; quantity: number };
 
 export function NewSaleDialog({
   open,
@@ -40,28 +40,97 @@ export function NewSaleDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { data: products } = useProducts();
-  const { data: customers } = useCustomers();
+  const { data: subscriptions } = useAllSubscriptions();
   const createSale = useCreatePdvSale();
 
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [pickedProductId, setPickedProductId] = useState("");
+  const [pickedQuantity, setPickedQuantity] = useState("1");
   const [method, setMethod] = useState<PdvSaleMethod>("cash");
   const [customerId, setCustomerId] = useState("");
 
   const activeProducts = (products ?? []).filter((product) => product.active);
 
-  const lineItems = activeProducts
-    .map((product) => ({ product, quantity: quantities[product.id] ?? 0 }))
-    .filter((line) => line.quantity > 0);
+  const customerOptions: ComboboxOption[] = [
+    { value: "", label: "Sem cliente" },
+    ...(subscriptions ?? [])
+      .filter((subscription) => subscription.status === "active" && subscription.customer)
+      .map((subscription) => ({
+        value: subscription.customerId,
+        label: subscription.plan.pdvDiscountPercent
+          ? `${subscription.customer!.name} — ${subscription.plan.pdvDiscountPercent}% off`
+          : subscription.customer!.name,
+      })),
+  ];
+
+  // Mesma regra de `pdv.service.ts#createSale`: só aplica o desconto do plano
+  // quando o cliente selecionado tem uma assinatura ativa com pdvDiscountPercent.
+  const activeSubscription = (subscriptions ?? []).find(
+    (subscription) => subscription.customerId === customerId && subscription.status === "active",
+  );
+  const discountPercent = activeSubscription?.plan.pdvDiscountPercent ?? null;
+
+  const lineItems = cart
+    .map((line) => ({
+      product: activeProducts.find((product) => product.id === line.productId),
+      quantity: line.quantity,
+    }))
+    .filter(
+      (line): line is { product: NonNullable<typeof line.product>; quantity: number } =>
+        Boolean(line.product),
+    )
+    .map((line) => ({
+      ...line,
+      unitPriceCents: discountPercent
+        ? Math.round(line.product.priceCents * (1 - discountPercent / 100))
+        : line.product.priceCents,
+    }));
 
   const totalCents = lineItems.reduce(
-    (sum, line) => sum + line.product.priceCents * line.quantity,
+    (sum, line) => sum + line.unitPriceCents * line.quantity,
     0,
   );
 
   function resetForm() {
-    setQuantities({});
+    setCart([]);
+    setPickedProductId("");
+    setPickedQuantity("1");
     setMethod("cash");
     setCustomerId("");
+  }
+
+  function handleAddItem() {
+    const quantity = Math.max(1, Number(pickedQuantity) || 0);
+    if (!pickedProductId || quantity <= 0) return;
+
+    setCart((prev) => {
+      const existing = prev.find((line) => line.productId === pickedProductId);
+      if (existing) {
+        return prev.map((line) =>
+          line.productId === pickedProductId
+            ? { ...line, quantity: line.quantity + quantity }
+            : line,
+        );
+      }
+      return [...prev, { productId: pickedProductId, quantity }];
+    });
+
+    setPickedProductId("");
+    setPickedQuantity("1");
+  }
+
+  function handleRemoveItem(productId: string) {
+    setCart((prev) => prev.filter((line) => line.productId !== productId));
+  }
+
+  function handleQuantityChange(productId: string, quantity: number) {
+    setCart((prev) =>
+      prev.map((line) =>
+        line.productId === productId
+          ? { ...line, quantity: Math.max(1, quantity) }
+          : line,
+      ),
+    );
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -70,8 +139,8 @@ export function NewSaleDialog({
 
     createSale.mutate(
       {
-        items: lineItems.map((line) => ({
-          productId: line.product.id,
+        items: cart.map((line) => ({
+          productId: line.productId,
           quantity: line.quantity,
         })),
         method,
@@ -99,7 +168,7 @@ export function NewSaleDialog({
         <DialogHeader>
           <DialogTitle>Nova venda</DialogTitle>
           <DialogDescription>
-            Venda no balcão — informe a quantidade de cada produto.
+            Venda no balcão — adicione os produtos e a quantidade de cada um.
           </DialogDescription>
         </DialogHeader>
 
@@ -109,28 +178,92 @@ export function NewSaleDialog({
               Nenhum produto ativo cadastrado ainda.
             </p>
           ) : (
+            <div className="flex items-end gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="sale-add-product">Produto</Label>
+                <Select value={pickedProductId} onValueChange={setPickedProductId}>
+                  <SelectTrigger id="sale-add-product">
+                    <SelectValue placeholder="Selecione um produto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeProducts.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        {product.name} — {formatCentsToBRL(product.priceCents)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-20 flex-col gap-1.5">
+                <Label htmlFor="sale-add-quantity">Qtd.</Label>
+                <Input
+                  id="sale-add-quantity"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={pickedQuantity}
+                  onChange={(event) => setPickedQuantity(event.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddItem}
+                disabled={!pickedProductId}
+              >
+                <Plus data-icon="inline-start" />
+                Adicionar
+              </Button>
+            </div>
+          )}
+
+          {lineItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nenhum item adicionado ainda.
+            </p>
+          ) : (
             <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-              {activeProducts.map((product) => (
-                <div key={product.id} className="flex items-center gap-3">
+              {lineItems.map((line) => (
+                <div key={line.product.id} className="flex items-center gap-3">
                   <div className="flex-1 text-sm">
-                    <p>{product.name}</p>
+                    <p>{line.product.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatCentsToBRL(product.priceCents)}
+                      {discountPercent ? (
+                        <>
+                          <span className="line-through">
+                            {formatCentsToBRL(line.product.priceCents)}
+                          </span>{" "}
+                          {formatCentsToBRL(line.unitPriceCents)} un. —{" "}
+                        </>
+                      ) : (
+                        <>{formatCentsToBRL(line.unitPriceCents)} un. — </>
+                      )}
+                      {formatCentsToBRL(line.unitPriceCents * line.quantity)}
                     </p>
                   </div>
                   <Input
                     type="number"
-                    min={0}
+                    min={1}
                     step={1}
                     className="w-20"
-                    value={quantities[product.id] ?? ""}
+                    value={line.quantity}
                     onChange={(event) =>
-                      setQuantities((prev) => ({
-                        ...prev,
-                        [product.id]: Math.max(0, Number(event.target.value) || 0),
-                      }))
+                      handleQuantityChange(
+                        line.product.id,
+                        Number(event.target.value) || 1,
+                      )
                     }
                   />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-destructive"
+                    onClick={() => handleRemoveItem(line.product.id)}
+                  >
+                    <Trash2 />
+                    <span className="sr-only">Remover</span>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -158,29 +291,22 @@ export function NewSaleDialog({
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="sale-customer">Cliente (opcional)</Label>
-              <Select
-                value={customerId || NO_CUSTOMER}
-                onValueChange={(value) =>
-                  setCustomerId(value === NO_CUSTOMER ? "" : value)
-                }
-              >
-                <SelectTrigger id="sale-customer">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CUSTOMER}>Sem cliente</SelectItem>
-                  {(customers ?? []).map((customer) => (
-                    <SelectItem key={customer.id} value={customer.id}>
-                      {customer.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                value={customerId}
+                onValueChange={setCustomerId}
+                options={customerOptions}
+                placeholder="Sem cliente"
+                searchPlaceholder="Buscar cliente..."
+                emptyText="Nenhum cliente com assinatura ativa encontrado."
+              />
             </div>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
-            <span className="text-muted-foreground">Total</span>
+            <span className="text-muted-foreground">
+              Total
+              {discountPercent ? ` (${discountPercent}% off aplicado)` : ""}
+            </span>
             <span className="font-medium">{formatCentsToBRL(totalCents)}</span>
           </div>
 
