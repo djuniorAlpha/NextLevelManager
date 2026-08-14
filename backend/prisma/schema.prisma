@@ -250,17 +250,16 @@ model Customer {
 }
 
 model SubscriptionPlan {
-  id                           String  @id @default(uuid())
-  name                         String
-  priceCents                   Int
-  billingInterval              String  @default("monthly")
-  includedMinutes              Int?
-  discountPercent              Int?
-  pdvDiscountPercent           Int?
-  maxActiveSubscribers         Int?
-  perks                        String[]
-  mercadoPagoPreapprovalPlanId String?
-  active                       Boolean @default(true)
+  id                    String  @id @default(uuid())
+  name                  String
+  priceCents            Int
+  billingInterval       String  @default("monthly")
+  includedMinutes       Int?
+  discountPercent       Int?
+  pdvDiscountPercent    Int?
+  maxActiveSubscribers  Int?
+  perks                 String[]
+  active                Boolean @default(true)
 
   subscriptions     CustomerSubscription[]
   productDiscounts  SubscriptionPlanProductDiscount[]
@@ -277,6 +276,7 @@ model CustomerSubscription {
   includedMinutesRemaining  Int?
   currentPeriodStart        DateTime?
   currentPeriodEnd          DateTime?
+  planChangedAt             DateTime?
   createdAt                 DateTime           @default(now())
 }
 

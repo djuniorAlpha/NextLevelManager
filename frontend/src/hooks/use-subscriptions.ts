@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   cancelSubscription,
+  changeSubscriptionPlan,
   createSubscription,
   listAllSubscriptions,
 } from "@/lib/api/subscriptions";
@@ -47,6 +48,28 @@ export function useCancelSubscription() {
     },
     onError: () => {
       toast.error("Não foi possível cancelar a assinatura. Tente novamente.");
+    },
+  });
+}
+
+export function useChangeSubscriptionPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      customerId,
+      subscriptionId,
+      planId,
+    }: {
+      customerId: string;
+      subscriptionId: string;
+      planId: string;
+    }) => changeSubscriptionPlan(customerId, subscriptionId, planId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subscriptions"] });
+      toast.success("Plano trocado com sucesso");
+    },
+    onError: () => {
+      toast.error("Não foi possível trocar o plano. Tente novamente.");
     },
   });
 }

@@ -34,3 +34,14 @@ export function cancelSubscription(
     { method: "POST" },
   );
 }
+
+export function changeSubscriptionPlan(
+  customerId: string,
+  subscriptionId: string,
+  planId: string,
+): Promise<CustomerSubscription> {
+  return apiFetch<CustomerSubscription>(
+    `/customers/${customerId}/subscriptions/${subscriptionId}/plan`,
+    { method: "PATCH", body: JSON.stringify({ planId }) },
+  );
+}

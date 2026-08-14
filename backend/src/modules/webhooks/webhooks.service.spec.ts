@@ -20,7 +20,11 @@ describe('WebhooksService', () => {
   let service: WebhooksService;
   let prisma: any;
   let config: { get: jest.Mock };
-  let mercadoPago: { getPaymentStatus: jest.Mock; getPreapproval: jest.Mock };
+  let mercadoPago: {
+    getPaymentStatus: jest.Mock;
+    getPreapproval: jest.Mock;
+    getInvoice: jest.Mock;
+  };
   let realtime: { emitPaymentConfirmed: jest.Mock };
 
   const secret = 'whsec-test';
@@ -35,7 +39,11 @@ describe('WebhooksService', () => {
       subscriptionPlan: { findUnique: jest.fn() },
     };
     config = { get: jest.fn().mockReturnValue(secret) };
-    mercadoPago = { getPaymentStatus: jest.fn(), getPreapproval: jest.fn() };
+    mercadoPago = {
+      getPaymentStatus: jest.fn(),
+      getPreapproval: jest.fn(),
+      getInvoice: jest.fn(),
+    };
     realtime = { emitPaymentConfirmed: jest.fn() };
 
     service = new WebhooksService(
@@ -273,5 +281,112 @@ describe('WebhooksService', () => {
       where: { id: 'sub-1' },
       data: { status: 'active' },
     });
+  });
+
+  it('ignora cobrança recorrente quando o invoice não tem preapproval_id', async () => {
+    mercadoPago.getInvoice.mockResolvedValue({
+      paymentStatus: 'approved',
+      preapprovalId: undefined,
+    });
+    const headers = signedHeaders(secret, 'invoice-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_authorized_payment',
+      data: { id: 'invoice-1' },
+    });
+
+    expect(prisma.customerSubscription.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('ignora cobrança recorrente quando não há CustomerSubscription correspondente', async () => {
+    mercadoPago.getInvoice.mockResolvedValue({
+      paymentStatus: 'approved',
+      preapprovalId: 'mp-preapproval-1',
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue(null);
+    const headers = signedHeaders(secret, 'invoice-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_authorized_payment',
+      data: { id: 'invoice-1' },
+    });
+
+    expect(prisma.customerSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it('ignora cobrança recorrente quando a assinatura já está canceled', async () => {
+    mercadoPago.getInvoice.mockResolvedValue({
+      paymentStatus: 'approved',
+      preapprovalId: 'mp-preapproval-1',
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'canceled',
+    });
+    const headers = signedHeaders(secret, 'invoice-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_authorized_payment',
+      data: { id: 'invoice-1' },
+    });
+
+    expect(prisma.customerSubscription.update).not.toHaveBeenCalled();
+  });
+
+  it('renova a assinatura ao aprovar a cobrança recorrente, substituindo os minutos e avançando o período', async () => {
+    mercadoPago.getInvoice.mockResolvedValue({
+      paymentStatus: 'approved',
+      preapprovalId: 'mp-preapproval-1',
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'active',
+    });
+    prisma.subscriptionPlan.findUnique.mockResolvedValue({
+      id: 'plan-1',
+      includedMinutes: 600,
+    });
+    const headers = signedHeaders(secret, 'invoice-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_authorized_payment',
+      data: { id: 'invoice-1' },
+    });
+
+    expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: {
+        status: 'active',
+        includedMinutesRemaining: 600,
+        currentPeriodStart: expect.any(Date),
+        currentPeriodEnd: expect.any(Date),
+      },
+    });
+  });
+
+  it('marca a assinatura como past_due quando a cobrança recorrente é recusada', async () => {
+    mercadoPago.getInvoice.mockResolvedValue({
+      paymentStatus: 'rejected',
+      preapprovalId: 'mp-preapproval-1',
+    });
+    prisma.customerSubscription.findFirst.mockResolvedValue({
+      id: 'sub-1',
+      planId: 'plan-1',
+      status: 'active',
+    });
+    const headers = signedHeaders(secret, 'invoice-1');
+
+    await service.handleMercadoPago(headers, {
+      type: 'subscription_authorized_payment',
+      data: { id: 'invoice-1' },
+    });
+
+    expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+      where: { id: 'sub-1' },
+      data: { status: 'past_due' },
+    });
+    expect(prisma.subscriptionPlan.findUnique).not.toHaveBeenCalled();
   });
 });

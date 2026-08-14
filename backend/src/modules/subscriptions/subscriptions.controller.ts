@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AdminJwtGuard } from '../../common/guards/admin-jwt.guard';
+import { ChangeSubscriptionPlanDto } from './dto/change-subscription-plan.dto';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { CreateSubscriptionPlanDto } from './dto/create-subscription-plan.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
@@ -75,5 +76,15 @@ export class SubscriptionsController {
     @Param('subscriptionId') subscriptionId: string,
   ) {
     return this.subscriptionsService.cancelSubscription(id, subscriptionId);
+  }
+
+  @UseGuards(AdminJwtGuard)
+  @Patch('customers/:id/subscriptions/:subscriptionId/plan')
+  changePlan(
+    @Param('id') id: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() dto: ChangeSubscriptionPlanDto,
+  ) {
+    return this.subscriptionsService.changePlan(id, subscriptionId, dto.planId);
   }
 }

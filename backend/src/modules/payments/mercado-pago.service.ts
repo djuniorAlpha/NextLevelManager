@@ -1,16 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
-import { MercadoPagoConfig, Payment, PreApproval, PreApprovalPlan } from 'mercadopago';
+import { Invoice, MercadoPagoConfig, Payment, PreApproval } from 'mercadopago';
 
 export interface PixChargeResult {
   externalPaymentId: string;
   qrCodeBase64: string | null;
   qrCodeText: string | null;
-}
-
-export interface PreapprovalPlanResult {
-  id: string;
 }
 
 export interface PreapprovalResult {
@@ -23,16 +19,27 @@ export interface PreapprovalResult {
 export class MercadoPagoService {
   private readonly payment: Payment;
   private readonly preApproval: PreApproval;
-  private readonly preApprovalPlan: PreApprovalPlan;
+  private readonly invoice: Invoice;
   private readonly payerEmail: string;
 
   constructor(config: ConfigService) {
-    const client = new MercadoPagoConfig({
-      accessToken: config.get<string>('MERCADOPAGO_ACCESS_TOKEN') ?? '',
+    const paymentsAccessToken = config.get<string>('MERCADOPAGO_ACCESS_TOKEN') ?? '';
+    // No sandbox do Mercado Pago, cada aplicação de teste só funciona pro produto
+    // declarado nela (Pagamentos vs. Assinaturas) — por isso um segundo token
+    // opcional pra Preapproval. Em produção, normalmente os dois apontam pra
+    // mesma credencial (uma conta real habilitada pra tudo).
+    const subscriptionsAccessToken =
+      config.get<string>('MERCADOPAGO_SUBSCRIPTIONS_ACCESS_TOKEN') ??
+      paymentsAccessToken;
+
+    this.payment = new Payment(
+      new MercadoPagoConfig({ accessToken: paymentsAccessToken }),
+    );
+    const subscriptionsConfig = new MercadoPagoConfig({
+      accessToken: subscriptionsAccessToken,
     });
-    this.payment = new Payment(client);
-    this.preApproval = new PreApproval(client);
-    this.preApprovalPlan = new PreApprovalPlan(client);
+    this.preApproval = new PreApproval(subscriptionsConfig);
+    this.invoice = new Invoice(subscriptionsConfig);
     this.payerEmail =
       config.get<string>('MERCADOPAGO_PAYER_EMAIL') ?? 'cliente@lanhouse.local';
   }
@@ -67,29 +74,8 @@ export class MercadoPagoService {
     return result.status;
   }
 
-  async createPreapprovalPlan(params: {
-    name: string;
-    priceCents: number;
-    backUrl: string;
-  }): Promise<PreapprovalPlanResult> {
-    const result = await this.preApprovalPlan.create({
-      body: {
-        reason: params.name,
-        back_url: params.backUrl,
-        auto_recurring: {
-          frequency: 1,
-          frequency_type: 'months',
-          transaction_amount: params.priceCents / 100,
-          currency_id: 'BRL',
-        },
-      },
-    });
-
-    return { id: String(result.id) };
-  }
-
   async createPreapprovalForCustomer(params: {
-    preapprovalPlanId: string;
+    priceCents: number;
     payerEmail: string;
     externalReference: string;
     reason: string;
@@ -97,11 +83,16 @@ export class MercadoPagoService {
   }): Promise<PreapprovalResult> {
     const result = await this.preApproval.create({
       body: {
-        preapproval_plan_id: params.preapprovalPlanId,
         payer_email: params.payerEmail,
         external_reference: params.externalReference,
         reason: params.reason,
         back_url: params.backUrl,
+        auto_recurring: {
+          frequency: 1,
+          frequency_type: 'months',
+          transaction_amount: params.priceCents / 100,
+          currency_id: 'BRL',
+        },
       },
     });
 
@@ -119,5 +110,27 @@ export class MercadoPagoService {
 
   async cancelPreapproval(id: string): Promise<void> {
     await this.preApproval.update({ id, body: { status: 'cancelled' } });
+  }
+
+  async updatePreapprovalAmount(id: string, priceCents: number): Promise<void> {
+    await this.preApproval.update({
+      id,
+      body: {
+        auto_recurring: {
+          transaction_amount: priceCents / 100,
+          currency_id: 'BRL',
+        },
+      },
+    });
+  }
+
+  async getInvoice(
+    id: string,
+  ): Promise<{ paymentStatus: string | undefined; preapprovalId: string | undefined }> {
+    const result = await this.invoice.get({ id });
+    return {
+      paymentStatus: result.payment?.status,
+      preapprovalId: result.preapproval_id,
+    };
   }
 }

@@ -12,6 +12,9 @@ import { CreateSubscriptionPlanDto } from './dto/create-subscription-plan.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['pending', 'active'] as const;
+// "Já tem vínculo em aberto com algum plano" — distinto do acima, que é usado só
+// pro limite de assinantes de UM plano específico.
+const OPEN_SUBSCRIPTION_STATUSES = ['pending', 'active', 'past_due'] as const;
 
 @Injectable()
 export class SubscriptionsService {
@@ -22,8 +25,9 @@ export class SubscriptionsService {
     private readonly mercadoPago: MercadoPagoService,
     config: ConfigService,
   ) {
-    const corsOrigin = config.get<string>('CORS_ORIGIN') ?? 'http://localhost:3001';
-    this.backUrl = `${corsOrigin}/login`;
+    this.backUrl =
+      config.get<string>('MERCADOPAGO_BACK_URL') ??
+      'https://www.mercadopago.com.br';
   }
 
   listActivePlans() {
@@ -80,6 +84,19 @@ export class SubscriptionsService {
   }
 
   async createSubscription(customerId: string, dto: CreateSubscriptionDto) {
+    const existingOpenSubscription =
+      await this.prisma.customerSubscription.findFirst({
+        where: {
+          customerId,
+          status: { in: [...OPEN_SUBSCRIPTION_STATUSES] },
+        },
+      });
+    if (existingOpenSubscription) {
+      throw new ConflictException(
+        'Cliente já tem uma assinatura em aberto — use "Trocar de plano" em vez de criar uma nova.',
+      );
+    }
+
     const plan = await this.prisma.subscriptionPlan.findUnique({
       where: { id: dto.planId },
     });
@@ -118,20 +135,6 @@ export class SubscriptionsService {
       });
     }
 
-    let preapprovalPlanId = plan.mercadoPagoPreapprovalPlanId;
-    if (!preapprovalPlanId) {
-      const createdPlan = await this.mercadoPago.createPreapprovalPlan({
-        name: plan.name,
-        priceCents: plan.priceCents,
-        backUrl: this.backUrl,
-      });
-      preapprovalPlanId = createdPlan.id;
-      await this.prisma.subscriptionPlan.update({
-        where: { id: plan.id },
-        data: { mercadoPagoPreapprovalPlanId: preapprovalPlanId },
-      });
-    }
-
     const subscription = await this.prisma.customerSubscription.create({
       data: {
         customerId: customer.id,
@@ -142,7 +145,7 @@ export class SubscriptionsService {
 
     try {
       const preapproval = await this.mercadoPago.createPreapprovalForCustomer({
-        preapprovalPlanId,
+        priceCents: plan.priceCents,
         payerEmail,
         externalReference: subscription.id,
         reason: plan.name,
@@ -183,6 +186,73 @@ export class SubscriptionsService {
     });
 
     return { ok: true };
+  }
+
+  async changePlan(
+    customerId: string,
+    subscriptionId: string,
+    newPlanId: string,
+  ) {
+    const subscription = await this.prisma.customerSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+    if (
+      !subscription ||
+      subscription.customerId !== customerId ||
+      !(OPEN_SUBSCRIPTION_STATUSES as readonly string[]).includes(
+        subscription.status,
+      )
+    ) {
+      throw new NotFoundException('Assinatura não encontrada');
+    }
+
+    const newPlan = await this.prisma.subscriptionPlan.findUnique({
+      where: { id: newPlanId },
+    });
+    if (!newPlan || !newPlan.active) {
+      throw new NotFoundException('Plano não encontrado ou inativo');
+    }
+
+    if (newPlan.id === subscription.planId) {
+      throw new BadRequestException('Já está nesse plano');
+    }
+
+    if (
+      subscription.planChangedAt &&
+      subscription.currentPeriodStart &&
+      subscription.planChangedAt >= subscription.currentPeriodStart
+    ) {
+      throw new BadRequestException(
+        'Só é possível trocar de plano uma vez por ciclo — aguarde a próxima renovação.',
+      );
+    }
+
+    if (newPlan.maxActiveSubscribers != null) {
+      const activeCount = await this.prisma.customerSubscription.count({
+        where: {
+          planId: newPlan.id,
+          status: { in: [...ACTIVE_SUBSCRIPTION_STATUSES] },
+        },
+      });
+      if (activeCount >= newPlan.maxActiveSubscribers) {
+        throw new BadRequestException('Plano esgotado');
+      }
+    }
+
+    await this.mercadoPago.updatePreapprovalAmount(
+      subscription.mercadoPagoPreapprovalId!,
+      newPlan.priceCents,
+    );
+
+    return this.prisma.customerSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        planId: newPlan.id,
+        includedMinutesRemaining: newPlan.includedMinutes ?? null,
+        planChangedAt: new Date(),
+      },
+      include: { plan: true },
+    });
   }
 
   private async assertPlanExists(id: string) {

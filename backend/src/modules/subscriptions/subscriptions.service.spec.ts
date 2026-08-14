@@ -17,7 +17,6 @@ describe('SubscriptionsService', () => {
     priceCents: 8990,
     active: true,
     maxActiveSubscribers: null,
-    mercadoPagoPreapprovalPlanId: 'mp-plan-1',
   };
 
   const CUSTOMER = { id: 'cust-1', email: 'cliente@teste.com' };
@@ -43,9 +42,9 @@ describe('SubscriptionsService', () => {
       },
     };
     mercadoPago = {
-      createPreapprovalPlan: jest.fn(),
       createPreapprovalForCustomer: jest.fn(),
       cancelPreapproval: jest.fn(),
+      updatePreapprovalAmount: jest.fn(),
     };
     config = { get: jest.fn().mockReturnValue('http://localhost:3001') };
     service = new SubscriptionsService(prisma, mercadoPago, config);
@@ -58,6 +57,15 @@ describe('SubscriptionsService', () => {
       include: { plan: true, customer: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
+  });
+
+  it('createSubscription lança ConflictException quando o cliente já tem assinatura em aberto', async () => {
+    prisma.customerSubscription.findFirst.mockResolvedValue({ id: 'sub-existente' });
+
+    await expect(
+      service.createSubscription('cust-1', { planId: 'plan-1' }),
+    ).rejects.toThrow(ConflictException);
+    expect(prisma.subscriptionPlan.findUnique).not.toHaveBeenCalled();
   });
 
   it('createSubscription lança NotFoundException quando o plano não existe ou está inativo', async () => {
@@ -104,13 +112,12 @@ describe('SubscriptionsService', () => {
       planId: 'plan-1',
     });
 
-    expect(mercadoPago.createPreapprovalPlan).not.toHaveBeenCalled();
     expect(prisma.customerSubscription.create).toHaveBeenCalledWith({
       data: { customerId: 'cust-1', planId: 'plan-1', status: 'pending' },
     });
     expect(mercadoPago.createPreapprovalForCustomer).toHaveBeenCalledWith(
       expect.objectContaining({
-        preapprovalPlanId: 'mp-plan-1',
+        priceCents: 8990,
         payerEmail: 'cliente@teste.com',
         externalReference: 'sub-1',
       }),
@@ -123,34 +130,6 @@ describe('SubscriptionsService', () => {
       subscriptionId: 'sub-1',
       checkoutUrl: 'https://mercadopago.com/checkout/abc',
     });
-  });
-
-  it('createSubscription cria o preapproval_plan no Mercado Pago quando o plano ainda não tem um', async () => {
-    prisma.subscriptionPlan.findUnique.mockResolvedValue({
-      ...PLAN,
-      mercadoPagoPreapprovalPlanId: null,
-    });
-    prisma.customer.findUnique.mockResolvedValue(CUSTOMER);
-    mercadoPago.createPreapprovalPlan.mockResolvedValue({ id: 'mp-plan-novo' });
-    prisma.customerSubscription.create.mockResolvedValue({ id: 'sub-1' });
-    mercadoPago.createPreapprovalForCustomer.mockResolvedValue({
-      id: 'mp-preapproval-1',
-      initPoint: 'https://mercadopago.com/checkout/abc',
-      status: 'pending',
-    });
-
-    await service.createSubscription('cust-1', { planId: 'plan-1' });
-
-    expect(mercadoPago.createPreapprovalPlan).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'Player Pass', priceCents: 8990 }),
-    );
-    expect(prisma.subscriptionPlan.update).toHaveBeenCalledWith({
-      where: { id: 'plan-1' },
-      data: { mercadoPagoPreapprovalPlanId: 'mp-plan-novo' },
-    });
-    expect(mercadoPago.createPreapprovalForCustomer).toHaveBeenCalledWith(
-      expect.objectContaining({ preapprovalPlanId: 'mp-plan-novo' }),
-    );
   });
 
   it('createSubscription remove a assinatura pendente quando o Mercado Pago falha', async () => {
@@ -221,6 +200,170 @@ describe('SubscriptionsService', () => {
     await expect(service.removePlan('plan-1')).resolves.toEqual({ ok: true });
     expect(prisma.subscriptionPlan.delete).toHaveBeenCalledWith({
       where: { id: 'plan-1' },
+    });
+  });
+
+  describe('changePlan', () => {
+    const OPEN_SUBSCRIPTION = {
+      id: 'sub-1',
+      customerId: 'cust-1',
+      planId: 'plan-1',
+      status: 'active',
+      mercadoPagoPreapprovalId: 'mp-preapproval-1',
+    };
+    const NEW_PLAN = {
+      id: 'plan-2',
+      name: 'Elite Pass',
+      priceCents: 23990,
+      active: true,
+      includedMinutes: 2400,
+      maxActiveSubscribers: null,
+    };
+
+    it('lança NotFoundException quando a assinatura não existe, é de outro cliente, ou está cancelada', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue(null);
+      await expect(
+        service.changePlan('cust-1', 'ghost', 'plan-2'),
+      ).rejects.toThrow(NotFoundException);
+
+      prisma.customerSubscription.findUnique.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        customerId: 'outro-cliente',
+      });
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).rejects.toThrow(NotFoundException);
+
+      prisma.customerSubscription.findUnique.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        status: 'canceled',
+      });
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lança NotFoundException quando o plano novo não existe ou está inativo', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue(OPEN_SUBSCRIPTION);
+      prisma.subscriptionPlan.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'ghost'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('lança BadRequestException quando o plano novo é o mesmo que já está', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue(OPEN_SUBSCRIPTION);
+      prisma.subscriptionPlan.findUnique.mockResolvedValue({
+        ...NEW_PLAN,
+        id: 'plan-1',
+      });
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-1'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mercadoPago.updatePreapprovalAmount).not.toHaveBeenCalled();
+    });
+
+    it('lança BadRequestException quando o plano novo está esgotado', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue(OPEN_SUBSCRIPTION);
+      prisma.subscriptionPlan.findUnique.mockResolvedValue({
+        ...NEW_PLAN,
+        maxActiveSubscribers: 5,
+      });
+      prisma.customerSubscription.count.mockResolvedValue(5);
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mercadoPago.updatePreapprovalAmount).not.toHaveBeenCalled();
+    });
+
+    it('atualiza o valor no Mercado Pago e troca o plano localmente, substituindo os minutos', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue(OPEN_SUBSCRIPTION);
+      prisma.subscriptionPlan.findUnique.mockResolvedValue(NEW_PLAN);
+      prisma.customerSubscription.update.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        planId: 'plan-2',
+        includedMinutesRemaining: 2400,
+      });
+
+      const result = await service.changePlan('cust-1', 'sub-1', 'plan-2');
+
+      expect(mercadoPago.updatePreapprovalAmount).toHaveBeenCalledWith(
+        'mp-preapproval-1',
+        23990,
+      );
+      expect(prisma.customerSubscription.update).toHaveBeenCalledWith({
+        where: { id: 'sub-1' },
+        data: {
+          planId: 'plan-2',
+          includedMinutesRemaining: 2400,
+          planChangedAt: expect.any(Date),
+        },
+        include: { plan: true },
+      });
+      expect(result.planId).toBe('plan-2');
+    });
+
+    it('lança BadRequestException quando já trocou de plano no ciclo atual', async () => {
+      const now = new Date();
+      const periodStart = new Date(now);
+      periodStart.setDate(periodStart.getDate() - 5);
+      const changedAt = new Date(now);
+      changedAt.setDate(changedAt.getDate() - 1);
+
+      prisma.customerSubscription.findUnique.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        currentPeriodStart: periodStart,
+        planChangedAt: changedAt,
+      });
+      prisma.subscriptionPlan.findUnique.mockResolvedValue(NEW_PLAN);
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).rejects.toThrow(BadRequestException);
+      expect(mercadoPago.updatePreapprovalAmount).not.toHaveBeenCalled();
+    });
+
+    it('permite trocar de plano quando a última troca foi em um ciclo anterior (já renovou)', async () => {
+      const periodStart = new Date();
+      const changedAt = new Date(periodStart);
+      changedAt.setMonth(changedAt.getMonth() - 1);
+
+      prisma.customerSubscription.findUnique.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        currentPeriodStart: periodStart,
+        planChangedAt: changedAt,
+      });
+      prisma.subscriptionPlan.findUnique.mockResolvedValue(NEW_PLAN);
+      prisma.customerSubscription.update.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        planId: 'plan-2',
+      });
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).resolves.toBeDefined();
+      expect(mercadoPago.updatePreapprovalAmount).toHaveBeenCalled();
+    });
+
+    it('permite trocar de plano quando nunca trocou antes ou a assinatura ainda não tem currentPeriodStart', async () => {
+      prisma.customerSubscription.findUnique.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        currentPeriodStart: null,
+        planChangedAt: null,
+      });
+      prisma.subscriptionPlan.findUnique.mockResolvedValue(NEW_PLAN);
+      prisma.customerSubscription.update.mockResolvedValue({
+        ...OPEN_SUBSCRIPTION,
+        planId: 'plan-2',
+      });
+
+      await expect(
+        service.changePlan('cust-1', 'sub-1', 'plan-2'),
+      ).resolves.toBeDefined();
+      expect(mercadoPago.updatePreapprovalAmount).toHaveBeenCalled();
     });
   });
 });

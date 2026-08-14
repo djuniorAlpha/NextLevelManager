@@ -10,7 +10,6 @@ export interface SubscriptionPlan {
   pdvDiscountPercent: number | null;
   maxActiveSubscribers: number | null;
   perks: string[];
-  mercadoPagoPreapprovalPlanId: string | null;
   active: boolean;
 }
 

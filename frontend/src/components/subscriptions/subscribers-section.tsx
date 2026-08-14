@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { ArrowLeftRight, Plus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ConfirmDeleteDialog } from "@/components/billing/confirm-delete-dialog";
+import { ChangePlanDialog } from "@/components/subscriptions/change-plan-dialog";
 import { NewSubscriptionDialog } from "@/components/subscriptions/new-subscription-dialog";
 import { useAllSubscriptions, useCancelSubscription } from "@/hooks/use-subscriptions";
 import {
@@ -24,7 +25,9 @@ import {
 } from "@/lib/format";
 import type { CustomerSubscription } from "@/types/subscription";
 
-const CANCELABLE_STATUSES = new Set(["pending", "active"]);
+// Assinatura "em aberto" — mesmo critério do backend (OPEN_SUBSCRIPTION_STATUSES
+// em subscriptions.service.ts) pra permitir cancelar ou trocar de plano.
+const OPEN_STATUSES = new Set(["pending", "active", "past_due"]);
 
 export function SubscribersSection() {
   const { data, isLoading, isError, refetch } = useAllSubscriptions();
@@ -32,6 +35,9 @@ export function SubscribersSection() {
 
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [canceling, setCanceling] = useState<CustomerSubscription | null>(null);
+  const [changingPlan, setChangingPlan] = useState<CustomerSubscription | null>(
+    null,
+  );
 
   function handleConfirmCancel() {
     if (!canceling) return;
@@ -98,16 +104,26 @@ export function SubscribersSection() {
                       : "—"}
                   </TableCell>
                   <TableCell className="text-right">
-                    {CANCELABLE_STATUSES.has(subscription.status) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => setCanceling(subscription)}
-                      >
-                        <X data-icon="inline-start" />
-                        Cancelar
-                      </Button>
+                    {OPEN_STATUSES.has(subscription.status) && (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setChangingPlan(subscription)}
+                        >
+                          <ArrowLeftRight data-icon="inline-start" />
+                          Trocar plano
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          onClick={() => setCanceling(subscription)}
+                        >
+                          <X data-icon="inline-start" />
+                          Cancelar
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>
@@ -118,6 +134,12 @@ export function SubscribersSection() {
       </CardContent>
 
       <NewSubscriptionDialog open={newDialogOpen} onOpenChange={setNewDialogOpen} />
+
+      <ChangePlanDialog
+        open={changingPlan !== null}
+        onOpenChange={(open) => !open && setChangingPlan(null)}
+        subscription={changingPlan}
+      />
 
       <ConfirmDeleteDialog
         open={canceling !== null}
