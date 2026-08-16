@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   CreditCard,
   Crown,
+  KeyRound,
   LineChart,
   LogOut,
   Monitor,
@@ -26,6 +27,7 @@ const NAV_LINKS = [
   { href: "/pdv", label: "PDV", icon: ShoppingCart },
   { href: "/financeiro", label: "Financeiro", icon: LineChart },
   { href: "/assinaturas", label: "Assinaturas", icon: Crown },
+  { href: "/tokens-pix", label: "Tokens Pix", icon: KeyRound },
 ];
 
 function AppShell({ children }: { children: React.ReactNode }) {

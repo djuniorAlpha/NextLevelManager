@@ -82,6 +82,15 @@ export class SessionsService {
         data: { consumedSeconds: clampedConsumedSeconds, endedAt: new Date() },
       });
 
+      if (session.tokenId) {
+        const chargedSeconds = Math.ceil(clampedConsumedSeconds / 60) * 60;
+        await tx.pixToken.update({
+          where: { id: session.tokenId },
+          data: { remainingSeconds: { decrement: chargedSeconds } },
+        });
+        return;
+      }
+
       if (!session.customerId) {
         return;
       }

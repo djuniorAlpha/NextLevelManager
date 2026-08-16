@@ -16,6 +16,8 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
 import { PaymentsModule } from './modules/payments/payments.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { PixTokensModule } from './modules/pix-tokens/pix-tokens.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { RealtimeModule } from './modules/realtime/realtime.module';
     SubscriptionsModule,
     PaymentsModule,
     WebhooksModule,
+    SettingsModule,
+    PixTokensModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

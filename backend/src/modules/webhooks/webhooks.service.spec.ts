@@ -2,6 +2,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { MercadoPagoService } from '../payments/mercado-pago.service';
+import { PixTokensService } from '../pix-tokens/pix-tokens.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 import { WebhooksService } from './webhooks.service';
 
@@ -26,6 +27,7 @@ describe('WebhooksService', () => {
     getInvoice: jest.Mock;
   };
   let realtime: { emitPaymentConfirmed: jest.Mock };
+  let pixTokens: { createForPayment: jest.Mock };
 
   const secret = 'whsec-test';
 
@@ -45,12 +47,14 @@ describe('WebhooksService', () => {
       getInvoice: jest.fn(),
     };
     realtime = { emitPaymentConfirmed: jest.fn() };
+    pixTokens = { createForPayment: jest.fn() };
 
     service = new WebhooksService(
       prisma,
       config as unknown as ConfigService,
       mercadoPago as unknown as MercadoPagoService,
       realtime as unknown as RealtimeGateway,
+      pixTokens as unknown as PixTokensService,
     );
   });
 
@@ -93,7 +97,7 @@ describe('WebhooksService', () => {
     expect(prisma.payment.update).not.toHaveBeenCalled();
   });
 
-  it('aprova o pagamento, cria a Session e emite payment.confirmed', async () => {
+  it('aprova o pagamento, cria o PixToken e emite payment.confirmed com o código', async () => {
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-1',
       status: 'pending',
@@ -115,21 +119,23 @@ describe('WebhooksService', () => {
       id: 'pkg-1',
       minutes: 60,
     });
+    pixTokens.createForPayment.mockResolvedValue({
+      token: { code: 'ABC12345' },
+      session: { id: 'session-1' },
+    });
 
     const headers = signedHeaders(secret, '999');
     await service.handleMercadoPago(headers, { data: { id: '999' } });
 
-    expect(prisma.session.create).toHaveBeenCalledWith({
-      data: {
-        machineId: 'machine-1',
-        paymentId: 'payment-1',
-        source: 'pix_guest',
-        allocatedSeconds: 3600,
-      },
-    });
+    expect(pixTokens.createForPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'payment-1', machineId: 'machine-1' }),
+      3600,
+    );
     expect(realtime.emitPaymentConfirmed).toHaveBeenCalledWith(
       'machine-1',
       'payment-1',
+      'ABC12345',
+      'session-1',
     );
   });
 
@@ -155,21 +161,21 @@ describe('WebhooksService', () => {
       id: 'rate-1',
       ratePerHourCents: 1000,
     });
+    pixTokens.createForPayment.mockResolvedValue({
+      token: { code: 'XYZ98765' },
+      session: { id: 'session-2' },
+    });
 
     const headers = signedHeaders(secret, '999');
     await service.handleMercadoPago(headers, { data: { id: '999' } });
 
-    expect(prisma.session.create).toHaveBeenCalledWith({
-      data: {
-        machineId: 'machine-1',
-        paymentId: 'payment-2',
-        source: 'pix_guest',
-        allocatedSeconds: 1800,
-      },
-    });
+    expect(pixTokens.createForPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'payment-2', machineId: 'machine-1' }),
+      1800,
+    );
   });
 
-  it('não cria Session quando o pagamento é rejeitado', async () => {
+  it('não cria PixToken quando o pagamento é rejeitado', async () => {
     prisma.payment.findFirst.mockResolvedValue({
       id: 'payment-3',
       status: 'pending',
@@ -188,7 +194,7 @@ describe('WebhooksService', () => {
     const headers = signedHeaders(secret, '999');
     await service.handleMercadoPago(headers, { data: { id: '999' } });
 
-    expect(prisma.session.create).not.toHaveBeenCalled();
+    expect(pixTokens.createForPayment).not.toHaveBeenCalled();
     expect(realtime.emitPaymentConfirmed).not.toHaveBeenCalled();
   });
 

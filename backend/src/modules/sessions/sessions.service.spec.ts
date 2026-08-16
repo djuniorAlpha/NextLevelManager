@@ -15,6 +15,7 @@ describe('SessionsService', () => {
       session: { update: jest.fn() },
       customer: { update: jest.fn() },
       customerSubscription: { findFirst: jest.fn(), update: jest.fn() },
+      pixToken: { update: jest.fn() },
     };
     prisma = {
       customer: { findUnique: jest.fn() },
@@ -215,5 +216,25 @@ describe('SessionsService', () => {
       data: { includedMinutesRemaining: { decrement: 3 } },
     });
     expect(tx.customer.update).not.toHaveBeenCalled();
+  });
+
+  it('endSession decrementa o PixToken em segundos (arredondado pro minuto) quando a sessão veio de um token', async () => {
+    prisma.session.findUnique.mockResolvedValue({
+      id: 'session-1',
+      machineId: 'machine-1',
+      customerId: null,
+      tokenId: 'token-1',
+      allocatedSeconds: 1800,
+      endedAt: null,
+    });
+
+    const result = await service.endSession(MACHINE, 'session-1', 125);
+
+    expect(tx.pixToken.update).toHaveBeenCalledWith({
+      where: { id: 'token-1' },
+      data: { remainingSeconds: { decrement: 180 } },
+    });
+    expect(tx.customer.update).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true });
   });
 });

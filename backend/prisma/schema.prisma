@@ -214,6 +214,7 @@ model Payment {
 
   session      Session?
   productSales ProductSale[]
+  pixToken     PixToken?
 }
 
 model Session {
@@ -222,6 +223,8 @@ model Session {
   machine          Machine       @relation(fields: [machineId], references: [id])
   customerId       String?
   customer         Customer?     @relation(fields: [customerId], references: [id])
+  tokenId          String?
+  token            PixToken?     @relation(fields: [tokenId], references: [id])
   paymentId        String?       @unique
   payment          Payment?      @relation(fields: [paymentId], references: [id])
   source           SessionSource
@@ -229,6 +232,26 @@ model Session {
   consumedSeconds  Int           @default(0)
   startedAt        DateTime      @default(now())
   endedAt          DateTime?
+}
+
+model PixToken {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  paymentId        String   @unique
+  payment          Payment  @relation(fields: [paymentId], references: [id])
+  totalSeconds     Int
+  remainingSeconds Int
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  sessions Session[]
+}
+
+model AppSetting {
+  id                          String   @id @default("singleton")
+  pixTokenValidityDays        Int      @default(7)
+  pixTokenMinRemainingMinutes Int      @default(5)
+  updatedAt                   DateTime @updatedAt
 }
 
 model Customer {

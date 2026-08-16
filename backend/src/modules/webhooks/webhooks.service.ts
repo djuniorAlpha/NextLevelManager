@@ -9,6 +9,7 @@ import type {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MercadoPagoService } from '../payments/mercado-pago.service';
+import { PixTokensService } from '../pix-tokens/pix-tokens.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
 
 export interface MercadoPagoWebhookBody {
@@ -25,6 +26,7 @@ export class WebhooksService {
     private readonly config: ConfigService,
     private readonly mercadoPago: MercadoPagoService,
     private readonly realtime: RealtimeGateway,
+    private readonly pixTokens: PixTokensService,
   ) {}
 
   async handleMercadoPago(
@@ -68,15 +70,16 @@ export class WebhooksService {
 
     if (mappedStatus === 'approved' && updated.machineId) {
       const allocatedSeconds = await this.resolveAllocatedSeconds(updated);
-      await this.prisma.session.create({
-        data: {
-          machineId: updated.machineId,
-          paymentId: updated.id,
-          source: 'pix_guest',
-          allocatedSeconds,
-        },
-      });
-      this.realtime.emitPaymentConfirmed(updated.machineId, updated.id);
+      const { token, session } = await this.pixTokens.createForPayment(
+        updated,
+        allocatedSeconds,
+      );
+      this.realtime.emitPaymentConfirmed(
+        updated.machineId,
+        updated.id,
+        token.code,
+        session.id,
+      );
     }
 
     return { ok: true };

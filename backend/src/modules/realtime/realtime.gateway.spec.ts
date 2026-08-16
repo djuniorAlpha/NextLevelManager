@@ -72,10 +72,17 @@ describe('RealtimeGateway', () => {
       status: 'active',
     });
 
-    gateway.emitPaymentConfirmed('machine-1', 'payment-1');
+    gateway.emitPaymentConfirmed(
+      'machine-1',
+      'payment-1',
+      'ABC12345',
+      'session-1',
+    );
     expect(gateway.server.to).toHaveBeenCalledWith('machine:machine-1');
     expect(gateway.server.emit).toHaveBeenCalledWith('payment.confirmed', {
       paymentId: 'payment-1',
+      tokenCode: 'ABC12345',
+      sessionId: 'session-1',
     });
 
     gateway.emitForceAction('machine-1', 'lock');

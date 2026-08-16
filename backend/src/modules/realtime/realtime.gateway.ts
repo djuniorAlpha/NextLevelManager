@@ -66,10 +66,15 @@ export class RealtimeGateway
       .emit('machine.status.changed', { machineId, status });
   }
 
-  emitPaymentConfirmed(machineId: string, paymentId: string) {
+  emitPaymentConfirmed(
+    machineId: string,
+    paymentId: string,
+    tokenCode?: string,
+    sessionId?: string,
+  ) {
     this.server
       .to(`machine:${machineId}`)
-      .emit('payment.confirmed', { paymentId });
+      .emit('payment.confirmed', { paymentId, tokenCode, sessionId });
   }
 
   emitForceAction(machineId: string, action: 'lock' | 'unlock' | 'shutdown') {

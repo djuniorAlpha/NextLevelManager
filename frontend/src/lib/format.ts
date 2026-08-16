@@ -3,6 +3,7 @@ import type { LoyaltyTier } from "@/types/customer";
 import type { PdvSaleMethod } from "@/types/pdv";
 import type { PaymentPurpose } from "@/types/report";
 import type { SubscriptionStatus } from "@/types/subscription";
+import type { PixTokenStatus } from "@/types/pix-token";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -80,6 +81,22 @@ export const SUBSCRIPTION_STATUS_BADGE_CLASS: Record<SubscriptionStatus, string>
   canceled: "bg-muted text-muted-foreground",
   past_due: "bg-destructive/10 text-destructive",
 };
+
+export const PIX_TOKEN_STATUS_LABEL: Record<PixTokenStatus, string> = {
+  active: "Ativo",
+  expired: "Expirado",
+  exhausted: "Esgotado",
+};
+
+export const PIX_TOKEN_STATUS_BADGE_CLASS: Record<PixTokenStatus, string> = {
+  active: "bg-success/10 text-success",
+  expired: "bg-muted text-muted-foreground",
+  exhausted: "bg-destructive/10 text-destructive",
+};
+
+export function formatSeconds(totalSeconds: number): string {
+  return formatMinutes(Math.round(Math.max(0, totalSeconds) / 60));
+}
 
 export function toISODateString(date: Date): string {
   return date.toISOString().slice(0, 10);

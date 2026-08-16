@@ -65,7 +65,15 @@ export class PaymentsService {
   }
 
   async getPaymentForMachine(machine: Machine, id: string) {
-    const payment = await this.prisma.payment.findUnique({ where: { id } });
+    const payment = await this.prisma.payment.findUnique({
+      where: { id },
+      include: {
+        pixToken: {
+          select: { code: true, expiresAt: true, remainingSeconds: true },
+        },
+        session: { select: { id: true } },
+      },
+    });
     if (!payment || payment.machineId !== machine.id) {
       throw new NotFoundException('Pagamento não encontrado');
     }
