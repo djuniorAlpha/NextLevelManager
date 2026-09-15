@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -12,15 +12,16 @@ import { LoginForm } from "@/components/auth/login-form";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Logo } from "@/components/logo";
 
-export default function LoginPage() {
+function LoginPageContent() {
   const { isAuthenticated } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace("/estacoes");
+      router.replace(searchParams.get("next") || "/estacoes");
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, router, searchParams]);
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
@@ -41,5 +42,13 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

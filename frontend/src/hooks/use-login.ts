@@ -1,11 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { loginAdmin } from "@/lib/api/auth";
 import { useAuth } from "@/components/providers/auth-provider";
 
 export function useLogin() {
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   return useMutation({
     mutationFn: ({
@@ -17,7 +18,7 @@ export function useLogin() {
     }) => loginAdmin(username, password),
     onSuccess: (data) => {
       login({ token: data.accessToken, admin: data.admin });
-      router.push("/estacoes");
+      router.push(searchParams.get("next") || "/estacoes");
     },
   });
 }

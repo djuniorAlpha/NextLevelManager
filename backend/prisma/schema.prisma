@@ -96,8 +96,9 @@ model Machine {
   lastHeartbeatAt DateTime?
   createdAt      DateTime      @default(now())
 
-  payments Payment[]
-  sessions Session[]
+  payments   Payment[]
+  sessions   Session[]
+  queueItems QueueItem[]
 }
 
 model ConsoleModel {
@@ -301,6 +302,25 @@ model CustomerSubscription {
   currentPeriodEnd          DateTime?
   planChangedAt             DateTime?
   createdAt                 DateTime           @default(now())
+}
+
+model Queue {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  items QueueItem[]
+}
+
+model QueueItem {
+  id        String   @id @default(uuid())
+  queueId   String
+  queue     Queue    @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id])
+  username  String
+  order     Int
+  createdAt DateTime @default(now())
 }
 
 model AdminUser {

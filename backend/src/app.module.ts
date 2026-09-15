@@ -18,6 +18,8 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { PixTokensModule } from './modules/pix-tokens/pix-tokens.module';
+import { QueuesModule } from './modules/queues/queues.module';
+import { QueueItemsModule } from './modules/queue-items/queue-items.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { PixTokensModule } from './modules/pix-tokens/pix-tokens.module';
     WebhooksModule,
     SettingsModule,
     PixTokensModule,
+    QueuesModule,
+    QueueItemsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

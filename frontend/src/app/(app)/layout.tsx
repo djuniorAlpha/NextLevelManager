@@ -7,6 +7,7 @@ import {
   Crown,
   KeyRound,
   LineChart,
+  ListOrdered,
   LogOut,
   Monitor,
   ShoppingCart,
@@ -28,6 +29,7 @@ const NAV_LINKS = [
   { href: "/financeiro", label: "Financeiro", icon: LineChart },
   { href: "/assinaturas", label: "Assinaturas", icon: Crown },
   { href: "/tokens-pix", label: "Tokens Pix", icon: KeyRound },
+  { href: "/filas", label: "Filas", icon: ListOrdered },
 ];
 
 function AppShell({ children }: { children: React.ReactNode }) {
