@@ -20,6 +20,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { PixTokensModule } from './modules/pix-tokens/pix-tokens.module';
 import { QueuesModule } from './modules/queues/queues.module';
 import { QueueItemsModule } from './modules/queue-items/queue-items.module';
+import { ReservationsModule } from './modules/reservations/reservations.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { QueueItemsModule } from './modules/queue-items/queue-items.module';
     PixTokensModule,
     QueuesModule,
     QueueItemsModule,
+    ReservationsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

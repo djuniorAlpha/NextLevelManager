@@ -78,6 +78,19 @@ enum AdminRole {
   attendant
 }
 
+enum ReservationType {
+  pc
+  console
+  room
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  canceled
+  completed
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -271,6 +284,7 @@ model Customer {
   payments      Payment[]
   subscriptions CustomerSubscription[]
   productSales  ProductSale[]
+  reservations  Reservation[]
 }
 
 model SubscriptionPlan {
@@ -323,6 +337,23 @@ model QueueItem {
   createdAt DateTime @default(now())
 }
 
+model Reservation {
+  id               String            @id @default(uuid())
+  type             ReservationType
+  customerId       String?
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  guestName        String?
+  guestPhone       String?
+  startAt          DateTime
+  durationMinutes  Int
+  endAt            DateTime
+  status           ReservationStatus @default(confirmed)
+  pendingNote      String?
+  createdByAdminId String
+  createdByAdmin   AdminUser         @relation("ReservationCreatedBy", fields: [createdByAdminId], references: [id])
+  createdAt        DateTime          @default(now())
+}
+
 model AdminUser {
   id           String    @id @default(uuid())
   name         String
@@ -333,4 +364,5 @@ model AdminUser {
 
   registeredPayments     Payment[]     @relation("PaymentRegisteredBy")
   registeredProductSales ProductSale[] @relation("ProductSaleRegisteredBy")
+  createdReservations    Reservation[] @relation("ReservationCreatedBy")
 }
