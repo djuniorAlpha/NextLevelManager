@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  CalendarCheck,
   CreditCard,
   Crown,
   KeyRound,
   LineChart,
+  ListOrdered,
   LogOut,
   Monitor,
   ShoppingCart,
@@ -28,6 +30,8 @@ const NAV_LINKS = [
   { href: "/financeiro", label: "Financeiro", icon: LineChart },
   { href: "/assinaturas", label: "Assinaturas", icon: Crown },
   { href: "/tokens-pix", label: "Tokens Pix", icon: KeyRound },
+  { href: "/filas", label: "Filas", icon: ListOrdered },
+  { href: "/agendamentos", label: "Agendamentos", icon: CalendarCheck },
 ];
 
 function AppShell({ children }: { children: React.ReactNode }) {

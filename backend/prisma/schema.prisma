@@ -78,6 +78,19 @@ enum AdminRole {
   attendant
 }
 
+enum ReservationType {
+  pc
+  console
+  room
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  canceled
+  completed
+}
+
 // ---------------------------------------------------------------------------
 // Models
 // ---------------------------------------------------------------------------
@@ -96,8 +109,9 @@ model Machine {
   lastHeartbeatAt DateTime?
   createdAt      DateTime      @default(now())
 
-  payments Payment[]
-  sessions Session[]
+  payments   Payment[]
+  sessions   Session[]
+  queueItems QueueItem[]
 }
 
 model ConsoleModel {
@@ -270,6 +284,7 @@ model Customer {
   payments      Payment[]
   subscriptions CustomerSubscription[]
   productSales  ProductSale[]
+  reservations  Reservation[]
 }
 
 model SubscriptionPlan {
@@ -303,6 +318,42 @@ model CustomerSubscription {
   createdAt                 DateTime           @default(now())
 }
 
+model Queue {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  items QueueItem[]
+}
+
+model QueueItem {
+  id        String   @id @default(uuid())
+  queueId   String
+  queue     Queue    @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id])
+  username  String
+  order     Int
+  createdAt DateTime @default(now())
+}
+
+model Reservation {
+  id               String            @id @default(uuid())
+  type             ReservationType
+  customerId       String?
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  guestName        String?
+  guestPhone       String?
+  startAt          DateTime
+  durationMinutes  Int
+  endAt            DateTime
+  status           ReservationStatus @default(confirmed)
+  pendingNote      String?
+  createdByAdminId String
+  createdByAdmin   AdminUser         @relation("ReservationCreatedBy", fields: [createdByAdminId], references: [id])
+  createdAt        DateTime          @default(now())
+}
+
 model AdminUser {
   id           String    @id @default(uuid())
   name         String
@@ -313,4 +364,5 @@ model AdminUser {
 
   registeredPayments     Payment[]     @relation("PaymentRegisteredBy")
   registeredProductSales ProductSale[] @relation("ProductSaleRegisteredBy")
+  createdReservations    Reservation[] @relation("ReservationCreatedBy")
 }

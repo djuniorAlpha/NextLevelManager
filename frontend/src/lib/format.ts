@@ -4,6 +4,7 @@ import type { PdvSaleMethod } from "@/types/pdv";
 import type { PaymentPurpose } from "@/types/report";
 import type { SubscriptionStatus } from "@/types/subscription";
 import type { PixTokenStatus } from "@/types/pix-token";
+import type { ReservationStatus, ReservationType } from "@/types/reservation";
 
 export const MACHINE_STATUS_LABEL: Record<MachineStatus, string> = {
   locked: "Bloqueada",
@@ -92,6 +93,26 @@ export const PIX_TOKEN_STATUS_BADGE_CLASS: Record<PixTokenStatus, string> = {
   active: "bg-success/10 text-success",
   expired: "bg-muted text-muted-foreground",
   exhausted: "bg-destructive/10 text-destructive",
+};
+
+export const RESERVATION_TYPE_LABEL: Record<ReservationType, string> = {
+  pc: "PC",
+  console: "Console",
+  room: "Sala",
+};
+
+export const RESERVATION_STATUS_LABEL: Record<ReservationStatus, string> = {
+  pending: "Pendente",
+  confirmed: "Confirmada",
+  canceled: "Cancelada",
+  completed: "Concluída",
+};
+
+export const RESERVATION_STATUS_BADGE_CLASS: Record<ReservationStatus, string> = {
+  pending: "bg-warning/10 text-warning",
+  confirmed: "bg-success/10 text-success",
+  canceled: "bg-muted text-muted-foreground",
+  completed: "bg-accent-4/10 text-accent-4",
 };
 
 export function formatSeconds(totalSeconds: number): string {

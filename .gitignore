@@ -38,3 +38,6 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# workspace
+pnpm-workspace.yaml
